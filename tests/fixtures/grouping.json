@@ -1,0 +1,35 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "分组测试 API", "version": "1.0.0" },
+  "tags": [
+    { "name": "exports", "description": "导出分组，声明顺序优先。" },
+    { "name": "资源目录", "description": "保留原始中文分组名。" },
+    { "name": "exports", "description": "重复声明。" },
+    { "name": "unused", "description": "尚无接口的分组。" }
+  ],
+  "paths": {
+    "/items": {
+      "get": {
+        "tags": ["资源目录", "custom", "资源目录"],
+        "responses": { "200": { "description": "资源列表" } }
+      }
+    },
+    "/reports": {
+      "get": {
+        "tags": ["reports", "custom"],
+        "responses": { "200": { "description": "报告列表" } }
+      }
+    },
+    "/health": {
+      "get": {
+        "responses": { "200": { "description": "服务正常" } }
+      }
+    },
+    "/empty": {
+      "post": {
+        "tags": [],
+        "responses": { "204": { "description": "无响应体" } }
+      }
+    }
+  }
+}

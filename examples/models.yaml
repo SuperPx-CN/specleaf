@@ -1,0 +1,29 @@
+Item:
+  type: object
+  required: [id, name]
+  properties:
+    id: { type: string, description: 资源唯一标识 }
+    name: { type: string, minLength: 1, description: 资源名称 }
+    metadata:
+      type: object
+      properties:
+        owner: { type: [string, 'null'], description: 资源所有者 }
+    children:
+      type: array
+      items: { $ref: '#/Item' }
+    state:
+      oneOf:
+        - { type: string, enum: [draft, published] }
+        - type: object
+          properties:
+            reason: { type: string, description: 自定义状态说明 }
+    attributes:
+      allOf:
+        - type: object
+          properties: { enabled: { type: boolean, default: false } }
+        - type: object
+          properties: { count: { type: integer, minimum: 0 } }
+    extra:
+      anyOf:
+        - { type: string }
+        - { type: number }

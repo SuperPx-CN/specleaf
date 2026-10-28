@@ -1,0 +1,161 @@
+openapi: 3.1.0
+info:
+  title: 示例资源 API
+  version: 1.0.0
+  summary: 资源查询、创建与导出的接口参考。
+  description: |
+    这是一份独立的 OpenAPI 示例，演示参数、递归模型、组合类型和多种原始示例。
+
+    所有示例均来自契约。替换服务地址和身份凭据后，可在自己的终端中使用 cURL。
+
+    ![远程架构图](https://example.invalid/architecture.png) · ![本地说明图](./guide.png)
+servers:
+  - url: https://api.example.invalid/v1
+    description: 示例服务地址
+tags:
+  - name: unused
+    description: 尚未定义接口的分组。
+  - name: catalog
+    description: 查询和维护**资源目录**，保留契约原始分组名。
+  - name: exports
+    description: 以 JSON、纯文本或 YAML 导出资源。
+security:
+  - BearerToken: []
+paths:
+  /items:
+    parameters:
+      - name: X-Request-ID
+        in: header
+        description: 可选请求标识
+        schema: { type: string }
+    get:
+      operationId: listItems
+      summary: 查询资源
+      tags: [catalog]
+      description: 按关键词分页查询资源，响应仅展示契约中的原始示例。
+      security: []
+      parameters:
+        - name: keyword
+          in: query
+          description: 资源名称关键词
+          schema: { type: string, maxLength: 100 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: './models.yaml#/Item' }
+              example: { data: [{ id: item-001, name: 示例资源, metadata: { owner: 示例用户 } }] }
+    post:
+      operationId: createItem
+      summary: 创建资源
+      tags: [catalog]
+      description: 创建资源并返回原始定义。名称可包含中文和特殊字符。
+      parameters:
+        - name: session
+          in: cookie
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './models.yaml#/Item' }
+            examples:
+              basic:
+                summary: 基本资源
+                value: { id: item-001, name: 示例资源 }
+              nested:
+                summary: 包含子资源
+                value: { id: item-002, name: "O'Brien", children: [{ id: child-001, name: 子资源 }] }
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties: { name: { type: string } }
+            example: { name: 表单资源 }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: './models.yaml#/Item' }
+              example: { id: item-001, name: 示例资源 }
+        '429':
+          description: 请求过于频繁
+          headers:
+            Retry-After:
+              description: 重试等待秒数
+              schema: { type: integer }
+          content:
+            application/json:
+              example: { code: RATE_LIMITED, message: 请稍后再试 }
+      x-rate-limit: { window_seconds: 60, principal_limit: 30 }
+      x-notes: 保留扩展字段和值。
+  /items/{id}:
+    get:
+      operationId: getItem
+      summary: 读取资源详情
+      tags: [catalog]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 资源详情
+          content:
+            application/json:
+              schema: { $ref: './models.yaml#/Item' }
+  /exports:
+    get:
+      operationId: exportItems
+      summary: 导出资源
+      tags: [exports]
+      responses:
+        '200':
+          description: 选择所需的媒体类型与原始示例。
+          content:
+            text/plain:
+              schema: { type: string }
+              example: |
+                item-001,示例资源
+            text/yaml:
+              schema: { type: string }
+              example: |
+                items:
+                  - id: item-001
+                    name: 示例资源
+            application/json:
+              examples:
+                populated: { value: { items: [{ id: item-001, name: 示例资源 }] } }
+                empty: { value: { items: [] } }
+                external:
+                  description: 外部示例只显示地址，不自动读取。
+                  externalValue: https://example.invalid/items.json
+  /resources/this-is-a-deliberately-long-path-segment-for-offline-document-layout-verification/{resourceIdentifier}:
+    delete:
+      operationId: deleteResource
+      summary: 删除一个具有非常长的标题以验证桌面和移动端自动换行的资源接口_LongUnbrokenOperationTitleForLayoutVerification
+      tags: [catalog]
+      deprecated: true
+      parameters:
+        - name: resourceIdentifier
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: 已删除，无响应体 }
+components:
+  securitySchemes:
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: 使用服务提供的访问令牌。
