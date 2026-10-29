@@ -36,9 +36,11 @@ import {
   Section,
 } from './components';
 import {
+  API_STATUS_LABELS,
   collectOperations,
   collectTags,
   formatValue,
+  getApiStatus,
   makeCurl,
   matchesOperation,
   METHODS,
@@ -338,23 +340,33 @@ export default function App() {
                 </button>
                 {open && (
                   <div className="group-operations">
-                    {items.map((operation) => (
-                      <a
-                        key={operation.id}
-                        href={operationHash(operation)}
-                        className={`operation-link ${selected?.id === operation.id ? 'selected' : ''}`}
-                        onClick={() => setDrawer(false)}
-                        title={`${operation.method.toUpperCase()} ${operation.path}`}
-                      >
-                        <span className={`method method-${operation.method}`}>
-                          {operation.method.toUpperCase()}
-                        </span>
-                        <span>{operation.definition.summary || operation.path}</span>
-                        {operation.definition.deprecated && (
-                          <span className="deprecated-dot" title="已弃用" />
-                        )}
-                      </a>
-                    ))}
+                    {items.map((operation) => {
+                      const status = getApiStatus(operation.definition);
+                      return (
+                        <a
+                          key={operation.id}
+                          href={operationHash(operation)}
+                          className={`operation-link ${selected?.id === operation.id ? 'selected' : ''}`}
+                          onClick={() => setDrawer(false)}
+                          title={`${operation.method.toUpperCase()} ${operation.path}`}
+                        >
+                          <span className={`method method-${operation.method}`}>
+                            {operation.method.toUpperCase()}
+                          </span>
+                          <span className="operation-link-title">
+                            {operation.definition.summary || operation.path}
+                          </span>
+                          {status && (
+                            <span
+                              className={`api-status-dot api-status-${status}`}
+                              role="img"
+                              aria-label={`接口状态：${API_STATUS_LABELS[status]}`}
+                              title={`接口状态：${API_STATUS_LABELS[status]}`}
+                            />
+                          )}
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -761,6 +773,7 @@ const POLICY_LABELS: Record<string, string> = {
   'x-idempotency': '幂等策略',
   'x-audit': '审计要求',
   'x-sensitive-fields': '敏感字段',
+  'x-api-status': '接口状态',
   'x-design-status': '设计状态',
 };
 const POLICY_FIELDS: Record<string, string> = {
@@ -831,6 +844,7 @@ function Policies({ definition }: { definition: ApiObject }) {
 
 function OperationDetail({ operation }: { operation: Operation }) {
   const definition = operation.definition;
+  const status = getApiStatus(definition);
   const body = resolveObject(document, definition.requestBody);
   const link = new URL(operationHash(operation), window.location.href).href;
   const parametersByLocation = ['path', 'query', 'header', 'cookie']
@@ -856,7 +870,11 @@ function OperationDetail({ operation }: { operation: Operation }) {
             <FileText size={12} />
             接口文档
           </span>
-          {definition.deprecated && <span className="deprecated-badge">已弃用</span>}
+          {status && (
+            <span className={`api-status-badge api-status-${status}`}>
+              {API_STATUS_LABELS[status]}
+            </span>
+          )}
           {operation.tags.map((tag) => (
             <span key={tag} className="tag-badge">
               {tag}

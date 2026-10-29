@@ -471,7 +471,9 @@ summary {
   border-radius: 5px;
   margin: 2px 0;
 }
-.operation-link > span:nth-child(2) {
+.operation-link-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -513,11 +515,32 @@ summary {
 .method-trace {
   color: #7b89ad;
 }
-.deprecated-dot {
-  width: 5px;
-  height: 5px;
+.api-status-draft {
+  --api-status-color: #626776;
+  --api-status-background: #f0f1f4;
+}
+.api-status-developing {
+  --api-status-color: #7656cc;
+  --api-status-background: #f2edff;
+}
+.api-status-testing {
+  --api-status-color: #326db0;
+  --api-status-background: #edf4fc;
+}
+.api-status-released {
+  --api-status-color: #247a57;
+  --api-status-background: #eaf6ef;
+}
+.api-status-deprecated {
+  --api-status-color: #966016;
+  --api-status-background: #fcf3e3;
+}
+.api-status-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
   border-radius: 50%;
-  background: #d7ac69;
+  background: var(--api-status-color);
   margin-left: auto;
 }
 .sidebar-footer {
@@ -1147,7 +1170,7 @@ summary {
 }
 .doc-badge,
 .tag-badge,
-.deprecated-badge {
+.api-status-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1165,9 +1188,10 @@ summary {
   background: #f7f5fa;
   color: #ad9cbb;
 }
-.deprecated-badge {
-  color: #bc965d;
-  background: #fcf5e9;
+.api-status-badge {
+  color: var(--api-status-color);
+  background: var(--api-status-background);
+  white-space: nowrap;
 }
 .endpoint-bar {
   display: flex;

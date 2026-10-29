@@ -1,16 +1,10 @@
 import { dirname, resolve } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 import { contractEntry, loadContract, type Contract } from './contract.ts';
+import { serializeContract } from './serialize.ts';
 
 const virtualId = 'virtual:openapi';
 const resolvedId = '\0' + virtualId;
-// JSON.parse preserves literal keys such as __proto__; escaping < keeps HTML raw text safe.
-export function serializeContract(document: Contract['document']): string {
-  const json = JSON.stringify(document).replace(/[<>&\u2028\u2029]/g, (character) =>
-    `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
-  return JSON.stringify(json);
-}
 export function openApiPlugin(provided?: Contract): Plugin {
   let root: string;
   let entry: string;
@@ -26,6 +20,12 @@ export function openApiPlugin(provided?: Contract): Plugin {
   }
   return {
     name: 'local-openapi-contract',
+    config(config) {
+      if (config.server?.watch === null || config.server?.watch?.awaitWriteFinish !== undefined) return;
+      // Wait for complete writes and avoid Chokidar dropping a rapid correction
+      // during its 50 ms change-event throttle on Linux.
+      return { server: { watch: { awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 10 } } } };
+    },
     configResolved(config) {
       root = config.root;
       entry = provided?.entry ?? contractEntry(root);
@@ -45,7 +45,7 @@ export function openApiPlugin(provided?: Contract): Plugin {
     async load(id) {
       if (id !== resolvedId) return;
       const result = contract ?? (await load());
-      return `export default JSON.parse(${serializeContract(result.document)});`;
+      return `export default JSON.parse(${JSON.stringify(serializeContract(result.document))});`;
     },
     transformIndexHtml(html) {
       if (!contract) return html;

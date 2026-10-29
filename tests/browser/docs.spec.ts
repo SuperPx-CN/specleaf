@@ -18,7 +18,7 @@ test('通用概览、中文搜索、方法筛选、Hash 刷新和返回', async 
   await page.getByRole('textbox', { name: '搜索接口' }).fill('创建');
   await page.getByLabel('筛选请求方法').selectOption('post');
   await expect(page.locator('.operation-link')).toHaveCount(1);
-  await page.getByRole('link', { name: 'POST 创建资源', exact: true }).click();
+  await page.getByRole('link', { name: 'POST 创建资源 接口状态：开发中', exact: true }).click();
   await expect(page.getByRole('heading', { name: '创建资源', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/#\/operation\/post%3A%2Fitems$/);
   await page.reload();
@@ -110,7 +110,7 @@ test('移动抽屉、键盘、字段展开、长标题和路径没有横向溢�
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('textbox', { name: '搜索接口' })).toBeFocused();
   await page.getByRole('textbox', { name: '搜索接口' }).fill('创建');
-  await page.getByRole('link', { name: 'POST 创建资源', exact: true }).click();
+  await page.getByRole('link', { name: 'POST 创建资源 接口状态：开发中', exact: true }).click();
   await expect(page.getByRole('heading', { name: '创建资源', exact: true })).toBeVisible();
   await expect(page.locator('.drawer-backdrop')).toHaveCount(0);
   await page.locator('#request').getByRole('button', { name: '展开 metadata', exact: true }).click();
@@ -124,6 +124,19 @@ test('移动抽屉、键盘、字段展开、长标题和路径没有横向溢�
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/mobile-long.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: '打开接口目录' }).click();
+  await page.getByRole('textbox', { name: '搜索接口' }).fill('');
+  const selectedLink = page.locator('.operation-link.selected');
+  const dot = selectedLink.getByRole('img', { name: '接口状态：已弃用', exact: true });
+  await expect(dot).toBeVisible();
+  const dotBox = (await dot.boundingBox())!;
+  const linkBox = (await selectedLink.boundingBox())!;
+  expect(dotBox.width).toBe(6);
+  expect(dotBox.height).toBe(6);
+  expect(dotBox.x + dotBox.width).toBeLessThanOrEqual(linkBox.x + linkBox.width);
+  expect(await selectedLink.locator('.operation-link-title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true);
+  expect(await page.locator('.sidebar-scroll').evaluate((sidebar) => sidebar.scrollWidth <= sidebar.clientWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/mobile-long-status.png', animations: 'disabled' });
 });
 
 test('独立示例全部接口可打开，无额外资源请求和运行时错误', async ({ page }) => {
