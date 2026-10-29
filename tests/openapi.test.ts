@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import grouping from './fixtures/grouping.json';
 import { contractEntry, loadContract } from '../build/contract';
 import {
+  API_STATUS_LABELS,
   collectOperations,
   collectTags,
   formatValue,
+  getApiStatus,
   makeCurl,
   matchesOperation,
   mediaExamples,
@@ -143,8 +145,10 @@ describe('本地契约合并', () => {
     await expect(loadContract(invalid)).rejects.toThrow(/info.title/);
   });
   it('相对入口按项目根目录解析', () => {
-    expect(contractEntry('/project/docs', './contract.yaml')).toBe('/project/docs/contract.yaml');
-    expect(contractEntry('/project/docs', '/other/api.json')).toBe('/other/api.json');
+    const root = resolve('project', 'docs');
+    const absolute = resolve('other', 'api.json');
+    expect(contractEntry(root, './contract.yaml')).toBe(join(root, 'contract.yaml'));
+    expect(contractEntry(root, absolute)).toBe(absolute);
   });
 });
 
@@ -303,6 +307,66 @@ describe('文档模型', () => {
     expect(makeCurl(document, { ...operation, definition: { security: [] } })).not.toContain(
       'Authorization',
     );
+  });
+});
+
+describe('接口状态', () => {
+  it.each([
+    ['draft', '草稿'],
+    ['developing', '开发中'],
+    ['testing', '测试中'],
+    ['released', '已发布'],
+    ['deprecated', '已弃用'],
+  ] as const)('识别 %s 并提供中文名称', (status, label) => {
+    expect(getApiStatus({ 'x-api-status': status })).toBe(status);
+    expect(API_STATUS_LABELS[status]).toBe(label);
+  });
+
+  it.each([undefined, 'draft', 'developing', 'testing', 'released', 'deprecated', 'unknown', 1])(
+    'deprecated: true 优先于扩展值 %s', (status) => {
+      expect(getApiStatus({ deprecated: true, 'x-api-status': status })).toBe('deprecated');
+    },
+  );
+
+  it.each([false, 'true', 1, null, undefined])('非布尔 true 的 deprecated 值 %s 不覆盖扩展状态', (deprecated) => {
+    expect(getApiStatus({ deprecated, 'x-api-status': 'testing' })).toBe('testing');
+    expect(getApiStatus({ deprecated })).toBeUndefined();
+  });
+
+  it.each([
+    undefined, null, '', 'unknown', 'Released', 'RELEASED', ' released ',
+    'toString', '__proto__', 'constructor', 0, 1, true, false, ['released'], { status: 'released' },
+  ])('缺失、未知或类型错误的扩展值 %j 不产生状态', (status) => {
+    expect(getApiStatus({ 'x-api-status': status })).toBeUndefined();
+  });
+
+  it('只读取当前 Operation，不从根、路径、分组或其他扩展推断状态', () => {
+    const [operation] = collectOperations({
+      ...base,
+      'x-api-status': 'released',
+      tags: [{ name: 'test', 'x-api-status': 'released' }],
+      paths: {
+        '/test': {
+          'x-api-status': 'released',
+          deprecated: true,
+          get: {
+            tags: ['test'],
+            'x-design-status': 'released',
+            'x-contract-status': 'released',
+          },
+        },
+      },
+    });
+    expect(getApiStatus(operation.definition)).toBeUndefined();
+  });
+
+  it('解析不会补写 deprecated 或修改扩展值', () => {
+    const definition = Object.freeze({ 'x-api-status': 'deprecated' });
+    const conflict = Object.freeze({ deprecated: true, 'x-api-status': 'released' });
+    expect(getApiStatus(definition)).toBe('deprecated');
+    expect(definition).toEqual({ 'x-api-status': 'deprecated' });
+    expect(getApiStatus(conflict)).toBe('deprecated');
+    expect(conflict).toEqual({ deprecated: true, 'x-api-status': 'released' });
   });
 });
 

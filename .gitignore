@@ -1,5 +1,7 @@
 node_modules/
 dist/
+/lib/
+*.tgz
 /openapi.html
 test-results/
 playwright-report/

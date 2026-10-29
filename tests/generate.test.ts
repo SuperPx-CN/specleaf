@@ -4,9 +4,8 @@ import { promisify } from 'node:util';
 import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { runInNewContext } from 'node:vm';
 import { projectRoot } from '../build/generate';
-import { serializeContract } from '../build/openapi-plugin';
+import { serializeContract } from '../build/serialize';
 
 const exec = promisify(execFile);
 const directories: string[] = [];
@@ -30,12 +29,19 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-describe('源码生成命令', () => {
+describe('生成命令', () => {
   it('显示帮助，缺少输入、未知参数和多余输入以中文报错并退出', async () => {
     const directory = await fixture();
     const help = await run(directory, '--help');
     expect(help.code).toBe(0);
     expect(help.stdout).toContain('用法：');
+    expect(help.stdout).toContain('specleaf <input>');
+    const { version } = JSON.parse(await readFile(resolve(projectRoot, 'package.json'), 'utf8'));
+    for (const option of ['--version', '-v']) {
+      const result = await run(directory, option);
+      expect(result.code).toBe(0);
+      expect(result.stdout.trim()).toBe(version);
+    }
     for (const args of [[], ['--unknown'], ['契约 文件.json', '-o'], ['契约 文件.json', 'extra.json']]) {
       const result = await run(directory, ...args);
       expect(result.code).not.toBe(0);
@@ -53,7 +59,8 @@ describe('源码生成命令', () => {
     expect(html).toContain('<title>通用测试 · API 文档</title>');
     expect(html).toContain('data:image/svg+xml,');
     expect(html).toContain('<style>');
-    expect(html.match(/<\/script>/g)).toHaveLength(1);
+    expect(html.match(/<\/script>/g)).toHaveLength(2);
+    expect(JSON.parse(html.match(/<script id="specleaf-contract" type="application\/json">(.*?)<\/script>/s)![1])).toEqual(base);
     expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+(?:stylesheet|modulepreload)/i);
     expect(await readFile(join(directory, 'keep.txt'), 'utf8')).toBe('preserved');
     expect((await readdir(directory)).sort()).toEqual(['keep.txt', 'openapi.html', '契约 文件.json']);
@@ -63,7 +70,7 @@ describe('源码生成命令', () => {
     const directory = await fixture();
     await writeFile(join(directory, '入口.yaml'), `openapi: 3.0.3\ninfo:\n  title: 跨文件示例\n  version: '1'\npaths: {}\ncomponents:\n  schemas:\n    Tree:\n      $ref: './模型 文件.json#/Tree'\n`);
     await writeFile(join(directory, '模型 文件.json'), JSON.stringify({ Tree: { type: 'object', properties: { child: { $ref: '#/Tree' } } } }));
-    const result = await exec('npm', ['--prefix', projectRoot, 'run', 'generate', '--', '入口.yaml', '-o', '输出 目录/文档.html'], { cwd: directory, timeout: 30000 });
+    const result = await exec(process.execPath, [process.env.npm_execpath!, '--prefix', projectRoot, 'run', 'generate', '--', '入口.yaml', '-o', '输出 目录/文档.html'], { cwd: directory, timeout: 30000 });
     expect(result.stderr).toBe('');
     const html = await readFile(join(directory, '输出 目录/文档.html'), 'utf8');
     expect(html).toContain('跨文件示例');
@@ -126,8 +133,31 @@ describe('源码生成命令', () => {
     document.value = '</sCrIpT><script>attack()</script><!--<script> & > \u2028\u2029';
     const serialized = serializeContract(document);
     expect(serialized).not.toContain('<');
-    const restored = runInNewContext(`JSON.parse(${serialized})`);
+    const restored = JSON.parse(serialized);
     expect(JSON.stringify(restored)).toBe(JSON.stringify(document));
     expect(Object.hasOwn(restored, '__proto__')).toBe(true);
+  });
+
+  it('HTML 数据块安全保存元数据和原始示例，界面脚本可跨契约复用', async () => {
+    const directory = await fixture();
+    const payload = '</sCrIpT><script>globalThis.INJECTED=true</script><!--<script> & > \u2028\u2029';
+    const document = {
+      ...base,
+      info: { title: payload, version: '1', description: '" data-injected="true' },
+      'x-literal': JSON.parse('{"__proto__":{"polluted":true}}'),
+      paths: { '/safe': { get: { responses: { '200': { description: 'ok', content: { 'application/json': { example: payload } } } } } } },
+    };
+    const entry = join(directory, '特殊.json');
+    await writeFile(entry, JSON.stringify(document));
+    expect((await run(directory, entry, '-o', 'special.html')).code).toBe(0);
+    expect((await run(directory, '契约 文件.json')).code).toBe(0);
+    const special = await readFile(join(directory, 'special.html'), 'utf8');
+    const ordinary = await readFile(join(directory, 'openapi.html'), 'utf8');
+    const data = special.match(/<script id="specleaf-contract" type="application\/json">(.*?)<\/script>/s)![1];
+    expect(data).not.toMatch(/[<>&\u2028\u2029]/);
+    expect(JSON.parse(data)).toEqual(document);
+    expect(special.match(/<\/script>/g)).toHaveLength(2);
+    expect(special.match(/<script>(.*?)<\/script>/s)![1]).toBe(ordinary.match(/<script>(.*?)<\/script>/s)![1]);
+    expect(special).toContain('&quot; data-injected=&quot;true');
   });
 });

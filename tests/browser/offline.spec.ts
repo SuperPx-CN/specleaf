@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { generate } from '../../build/generate';
+import { collectOperations } from '../../src/lib/openapi';
 
 test.describe('独立离线 HTML', () => {
   test.describe.configure({ mode: 'serial' });
@@ -56,9 +57,15 @@ test.describe('独立离线 HTML', () => {
     await expect(page.locator('img')).toHaveCount(0);
     await expect(page.getByRole('link', { name: '[图片] 远程架构图', exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: '搜索接口' }).fill('创建');
-    await page.getByRole('link', { name: 'POST 创建资源', exact: true }).click();
+    const operationLink = page.getByRole('link', { name: 'POST 创建资源 接口状态：开发中', exact: true });
+    await expect(operationLink.getByRole('img', { name: '接口状态：开发中', exact: true })).toBeVisible();
+    await operationLink.click();
     await page.reload();
     await expect(page.locator('.title-row h1')).toHaveText('创建资源');
+    await expect(page.locator('.api-status-badge')).toHaveText('开发中');
+    const statusPolicy = page.locator('.policy-card').filter({ has: page.locator('summary code', { hasText: 'x-api-status' }) });
+    await expect(statusPolicy.locator('summary')).toContainText('接口状态');
+    await expect(statusPolicy.locator('p')).toHaveText('developing');
     await page.locator('#request').getByRole('button', { name: '展开 children', exact: true }).click();
     await page.locator('#request').getByRole('button', { name: '展开 [] 数组元素', exact: true }).click();
     await page.locator('#request').getByRole('button', { name: '展开 children', exact: true }).last().click();
@@ -75,6 +82,11 @@ test.describe('独立离线 HTML', () => {
     const contract = JSON.parse(await readFile((await download.path())!, 'utf8'));
     expect(contract.info.title).toBe('示例资源 API');
     expect(Object.keys(contract.paths)).toHaveLength(4);
+    expect(contract.paths['/items'].post['x-api-status']).toBe('developing');
+    expect(contract.paths['/items'].post).not.toHaveProperty('deprecated');
+    const deprecated = collectOperations(contract).find((operation) => operation.method === 'delete')!.definition;
+    expect(deprecated['x-api-status']).toBe('deprecated');
+    expect(deprecated.deprecated).toBe(true);
     expect(requests).toEqual([]);
     expect(errors).toEqual([]);
   });
@@ -115,7 +127,9 @@ test.describe('独立离线 HTML', () => {
     await page.goto(pathToFileURL(special).href);
     await expect(page.locator('.overview-hero h1')).toHaveText(payload + '.');
     expect(await page.locator('meta[name="description"]').getAttribute('content')).toContain(payload);
-    await expect(page.locator('script')).toHaveCount(1);
+    await expect(page.locator('script')).toHaveCount(2);
+    await expect(page.locator('script[type="application/json"]')).toHaveCount(1);
+    expect(await page.locator('#specleaf-contract').evaluate((node) => JSON.parse(node.textContent!).info.title)).toBe(payload);
     expect(await page.evaluate(() => (window as any).INJECTED)).toBeUndefined();
     await expect(page.locator('img')).toHaveCount(0);
     await expect(page.locator('.image-link')).toHaveCount(2);
