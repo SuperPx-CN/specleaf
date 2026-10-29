@@ -260,6 +260,40 @@ export function schemaConstraints(document: ApiObject, raw: any): [string, any][
     .map(([key, label]) => [`${label} · ${key}`, schema[key]]);
 }
 
+
+// Keep common constraints readable; exact schema keywords remain available in details.
+export function schemaConstraintSummary(document: ApiObject, raw: any): [string, any][] {
+  const schema = object(resolveSchema(document, raw));
+  const summary: [string, any][] = [];
+  const compact = new Set([
+    'format', 'enum', 'const', 'default', 'minimum', 'maximum',
+    'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+    'readOnly', 'writeOnly', 'deprecated', 'nullable',
+  ]);
+  for (const [key, label] of Object.entries(CONSTRAINTS)) {
+    if (!compact.has(key) || !own(schema, key)) continue;
+    const value = schema[key];
+    if (['readOnly', 'writeOnly', 'deprecated', 'nullable'].includes(key) && value === false)
+      continue;
+    summary.push([label, value]);
+  }
+  for (const [min, max, label, unit] of [
+    ['minLength', 'maxLength', '长度', '字符'],
+    ['minItems', 'maxItems', '数量', '项'],
+    ['minProperties', 'maxProperties', '属性数量', '个'],
+  ]) {
+    if (!own(schema, min) && !own(schema, max)) continue;
+    const lower = schema[min];
+    const upper = schema[max];
+    const value = lower === upper ? `${lower} ${unit}`
+      : lower === undefined ? `最多 ${upper} ${unit}`
+      : upper === undefined ? `至少 ${lower} ${unit}`
+      : `${lower}–${upper} ${unit}`;
+    summary.push([label, value]);
+  }
+  return summary;
+}
+
 export interface Example {
   name: string;
   value?: any;

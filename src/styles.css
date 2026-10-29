@@ -1483,6 +1483,36 @@ summary {
   margin-bottom: 5px;
   font-weight: 500;
 }
+.constraint-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #a08cae;
+}
+.constraint-summary > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.constraint-summary code {
+  font-size: inherit;
+  color: #9275a7;
+  white-space: pre-wrap;
+}
+.constraint-details {
+  margin-top: 5px;
+  font-size: 11px;
+}
+.constraint-details > summary {
+  cursor: pointer;
+  color: #9275a7;
+}
+.constraint-details > summary:focus-visible {
+  outline: 2px solid #7357e8;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
 .constraints {
   font-size: 11px;
   margin-top: 5px;

@@ -11,6 +11,7 @@ import {
   resolveObject,
   resolveSchema,
   schemaConstraints,
+  schemaConstraintSummary,
   schemaEdges,
   schemaType,
   type ApiObject,
@@ -212,6 +213,7 @@ function SchemaRow({
   const recursive = reference ? ancestors.has(reference) : false;
   const edges = recursive || depth >= 32 ? [] : schemaEdges(document, raw);
   const constraints = schemaConstraints(document, raw);
+  const summary = schemaConstraintSummary(document, raw);
   const nextAncestors = new Set(ancestors);
   if (reference) nextAncestors.add(reference);
   const modelName = reference
@@ -252,15 +254,25 @@ function SchemaRow({
           <Markdown>{schema.description}</Markdown>
           {recursive && <span className="reference-note">递归引用 · {modelName}</span>}
           {depth >= 32 && <span className="reference-note">已达到展示深度上限</span>}
-          {constraints.length > 0 && (
-            <div className="constraints">
-              {constraints.map(([label, value]) => (
-                <div key={label}>
-                  <span>{label}：</span>
-                  <code>{shortValue(value)}</code>
-                </div>
+          {summary.length > 0 && (
+            <div className="constraint-summary">
+              {summary.map(([label, value]) => (
+                <span key={label}>{label}：<code>{shortValue(value)}</code></span>
               ))}
             </div>
+          )}
+          {constraints.length > 0 && (
+            <details className="constraint-details">
+              <summary>详细校验规则</summary>
+              <div className="constraints">
+                {constraints.map(([label, value]) => (
+                  <div key={label}>
+                    <span>{label}：</span>
+                    <code>{shortValue(value)}</code>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
           {!schema.title && !schema.description && !constraints.length && !recursive && (
             <span className="muted">—</span>
