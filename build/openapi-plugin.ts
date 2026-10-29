@@ -20,6 +20,12 @@ export function openApiPlugin(provided?: Contract): Plugin {
   }
   return {
     name: 'local-openapi-contract',
+    config(config) {
+      if (config.server?.watch === null || config.server?.watch?.awaitWriteFinish !== undefined) return;
+      // Wait for complete writes and avoid Chokidar dropping a rapid correction
+      // during its 50 ms change-event throttle on Linux.
+      return { server: { watch: { awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 10 } } } };
+    },
     configResolved(config) {
       root = config.root;
       entry = provided?.entry ?? contractEntry(root);
