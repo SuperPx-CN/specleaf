@@ -70,7 +70,11 @@ describe('生成命令', () => {
     const directory = await fixture();
     await writeFile(join(directory, '入口.yaml'), `openapi: 3.0.3\ninfo:\n  title: 跨文件示例\n  version: '1'\npaths: {}\ncomponents:\n  schemas:\n    Tree:\n      $ref: './模型 文件.json#/Tree'\n`);
     await writeFile(join(directory, '模型 文件.json'), JSON.stringify({ Tree: { type: 'object', properties: { child: { $ref: '#/Tree' } } } }));
-    const result = await exec(process.execPath, [process.env.npm_execpath!, '--prefix', projectRoot, 'run', 'generate', '--', '入口.yaml', '-o', '输出 目录/文档.html'], { cwd: directory, timeout: 30000 }).catch((error) => {
+    const env = { ...process.env };
+    // Vitest can expose uppercase lifecycle keys on Windows. Remove the parent
+    // event so it cannot shadow npm's new lowercase keys when spawning a child.
+    for (const key of Object.keys(env)) if (/^npm_lifecycle_/i.test(key)) delete env[key];
+    const result = await exec(process.execPath, [process.env.npm_execpath!, '--prefix', projectRoot, 'run', 'generate', '--', '入口.yaml', '-o', '输出 目录/文档.html'], { cwd: directory, env, timeout: 30000 }).catch((error) => {
       throw new Error(`${error.message}\n${error.stdout}`, { cause: error });
     });
     expect(result.stderr).toBe('');
