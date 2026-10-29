@@ -31,6 +31,7 @@ paths:
     get:
       operationId: listItems
       summary: 查询资源
+      x-api-status: released
       tags: [catalog]
       description: 按关键词分页查询资源，响应仅展示契约中的原始示例。
       security: []
@@ -57,6 +58,7 @@ paths:
     post:
       operationId: createItem
       summary: 创建资源
+      x-api-status: developing
       tags: [catalog]
       description: 创建资源并返回原始定义。名称可包含中文和特殊字符。
       parameters:
@@ -102,6 +104,7 @@ paths:
     get:
       operationId: getItem
       summary: 读取资源详情
+      x-api-status: testing
       tags: [catalog]
       parameters:
         - name: id
@@ -118,6 +121,7 @@ paths:
     get:
       operationId: exportItems
       summary: 导出资源
+      x-api-status: draft
       tags: [exports]
       responses:
         '200':
@@ -144,6 +148,7 @@ paths:
     delete:
       operationId: deleteResource
       summary: 删除一个具有非常长的标题以验证桌面和移动端自动换行的资源接口_LongUnbrokenOperationTitleForLayoutVerification
+      x-api-status: deprecated
       tags: [catalog]
       deprecated: true
       parameters:

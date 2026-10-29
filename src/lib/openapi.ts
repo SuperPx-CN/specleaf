@@ -11,6 +11,15 @@ export const METHODS = [
   'trace',
 ] as const;
 export type Method = (typeof METHODS)[number];
+export const API_STATUS_LABELS = {
+  draft: '草稿',
+  developing: '开发中',
+  testing: '测试中',
+  released: '已发布',
+  deprecated: '已弃用',
+} as const;
+export type ApiStatus = keyof typeof API_STATUS_LABELS;
+
 export interface Operation {
   id: string;
   method: Method;
@@ -24,6 +33,14 @@ export const object = (value: unknown): ApiObject =>
   value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 export const own = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key);
 export const pointerEscape = (value: string) => value.replace(/~/g, '~0').replace(/\//g, '~1');
+
+export function getApiStatus(definition: ApiObject): ApiStatus | undefined {
+  if (definition.deprecated === true) return 'deprecated';
+  const status: unknown = definition['x-api-status'];
+  return typeof status === 'string' && own(API_STATUS_LABELS, status)
+    ? (status as ApiStatus)
+    : undefined;
+}
 
 export function resolvePointer(document: ApiObject, reference: string): any {
   if (!reference.startsWith('#')) throw new Error(`仅支持已合并的内部引用：${reference}`);
