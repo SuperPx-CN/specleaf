@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import react from '@vitejs/plugin-react';
-import { build } from 'vite';
 import { loadContract, type Contract } from './contract.ts';
-import { openApiPlugin } from './openapi-plugin.ts';
+import { serializeContract } from './serialize.ts';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -16,34 +14,12 @@ export function escapeHtml(value: string): string {
 }
 
 export async function renderHtml(contract: Contract): Promise<string> {
-  const result = await build({
-    configFile: false,
-    root: projectRoot,
-    publicDir: false,
-    base: './',
-    logLevel: 'silent',
-    plugins: [react(), openApiPlugin(contract)],
-    // Library mode inlines imported assets; write:false never clears an output directory.
-    build: {
-      write: false,
-      emptyOutDir: false,
-      copyPublicDir: false,
-      cssCodeSplit: false,
-      sourcemap: false,
-      minify: true,
-      lib: { entry: resolve(projectRoot, 'src/main.tsx'), formats: ['iife'], name: 'OpenApiDocs' },
-    },
-    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
-  });
-  if ('close' in result) throw new Error('不支持监听构建。');
-  const output = (Array.isArray(result) ? result : [result]).flatMap((item) => item.output);
-  const scripts = output.filter((item) => item.type === 'chunk');
-  const styles = output.filter((item) => item.type === 'asset' && item.fileName.endsWith('.css'));
-  if (scripts.length !== 1 || output.length !== scripts.length + styles.length)
-    throw new Error('离线构建必须只包含一个脚本及内嵌样式。');
-  const script = scripts[0].code.replace(/<\/script/gi, '<\\/script');
-  const css = styles.map((item) => item.type === 'asset' ? String(item.source) : '').join('\n').replace(/<\/style/gi, '\\3c /style');
-  const favicon = await readFile(resolve(projectRoot, 'public/favicon.svg'), 'utf8');
+  const assets = new URL('../lib/assets/', import.meta.url);
+  const [javascript, stylesheet, favicon] = await Promise.all(
+    ['ui.js', 'ui.css', 'favicon.svg'].map((file) => readFile(new URL(file, assets), 'utf8')),
+  );
+  const script = javascript.replace(/<\/script/gi, '<\\/script');
+  const css = stylesheet.replace(/<\/style/gi, '\\3c /style');
   const title = escapeHtml(contract.document.info.title);
   const description = escapeHtml(contract.document.info.description || contract.document.info.title);
   return `<!doctype html>
@@ -58,7 +34,7 @@ export async function renderHtml(contract: Contract): Promise<string> {
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(favicon)}">
 <style>${css}</style>
 </head>
-<body><div id="root"></div><script>${script}</script></body>
+<body><div id="root"></div><script id="specleaf-contract" type="application/json">${serializeContract(contract.document)}</script><script>${script}</script></body>
 </html>\n`;
 }
 
@@ -98,7 +74,7 @@ export async function generate(input: string, destination: string): Promise<stri
     await mkdir(dirname(output), { recursive: true });
     temporary = join(dirname(output), `.${basename(output)}.${randomUUID()}.tmp`);
     await writeFile(temporary, html, { encoding: 'utf8', flag: 'wx' });
-    // Recheck after building and replace only once the full document has been written.
+    // Recheck after rendering and replace only once the full document has been written.
     await protectSources(output, contract.files);
     await rename(temporary, output);
     return output;

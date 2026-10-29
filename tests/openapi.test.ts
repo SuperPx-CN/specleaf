@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import grouping from './fixtures/grouping.json';
 import { contractEntry, loadContract } from '../build/contract';
 import {
@@ -143,8 +143,10 @@ describe('本地契约合并', () => {
     await expect(loadContract(invalid)).rejects.toThrow(/info.title/);
   });
   it('相对入口按项目根目录解析', () => {
-    expect(contractEntry('/project/docs', './contract.yaml')).toBe('/project/docs/contract.yaml');
-    expect(contractEntry('/project/docs', '/other/api.json')).toBe('/other/api.json');
+    const root = resolve('project', 'docs');
+    const absolute = resolve('other', 'api.json');
+    expect(contractEntry(root, './contract.yaml')).toBe(join(root, 'contract.yaml'));
+    expect(contractEntry(root, absolute)).toBe(absolute);
   });
 });
 

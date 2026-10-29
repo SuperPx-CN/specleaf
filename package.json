@@ -2,27 +2,45 @@
   "name": "specleaf",
   "version": "1.0.0",
   "description": "将本地 OpenAPI 3.0 / 3.1 YAML 或 JSON 转为可离线阅读的单文件 HTML 文档。",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SuperPx-CN/specleaf.git"
+  },
+  "homepage": "https://github.com/SuperPx-CN/specleaf#readme",
+  "bugs": {
+    "url": "https://github.com/SuperPx-CN/specleaf/issues"
+  },
   "type": "module",
+  "bin": {
+    "specleaf": "lib/cli.js"
+  },
+  "files": [
+    "lib/cli.js",
+    "lib/assets/",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run typecheck && node build/build.ts",
+    "build": "npm run typecheck && npm run build:package && node build/build.ts",
+    "build:package": "node build/package.ts",
+    "prepack": "npm run typecheck && npm run build:package",
+    "pregenerate": "npm run build:package",
     "generate": "node build/cli.ts",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:package",
     "test": "vitest run",
+    "test:package": "node tests/package.mjs",
+    "pretest:e2e": "npm run build",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@apidevtools/json-schema-ref-parser": "^16.0.5",
-    "lucide-react": "^0.468.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "@apidevtools/json-schema-ref-parser": "^16.0.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
@@ -30,6 +48,11 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "~5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

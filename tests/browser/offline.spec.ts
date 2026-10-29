@@ -115,7 +115,9 @@ test.describe('独立离线 HTML', () => {
     await page.goto(pathToFileURL(special).href);
     await expect(page.locator('.overview-hero h1')).toHaveText(payload + '.');
     expect(await page.locator('meta[name="description"]').getAttribute('content')).toContain(payload);
-    await expect(page.locator('script')).toHaveCount(1);
+    await expect(page.locator('script')).toHaveCount(2);
+    await expect(page.locator('script[type="application/json"]')).toHaveCount(1);
+    expect(await page.locator('#specleaf-contract').evaluate((node) => JSON.parse(node.textContent!).info.title)).toBe(payload);
     expect(await page.evaluate(() => (window as any).INJECTED)).toBeUndefined();
     await expect(page.locator('img')).toHaveCount(0);
     await expect(page.locator('.image-link')).toHaveCount(2);
