@@ -44,7 +44,9 @@ try {
   const packed = JSON.parse(stdout)[0];
   const expected = ['LICENSE', 'README.md', 'lib/assets/favicon.svg', 'lib/assets/ui.css', 'lib/assets/ui.js', 'lib/cli.js', 'package.json'];
   assert.deepEqual(packed.files.map((file) => file.path).sort(), expected.sort());
-  assert.ok(packed.files.find((file) => file.path === 'lib/cli.js').mode & 0o111);
+  // Windows records readable file bits; executable commands use npm's .cmd shim.
+  const commandMode = process.platform === 'win32' ? 0o444 : 0o111;
+  assert.ok(packed.files.find((file) => file.path === 'lib/cli.js').mode & commandMode);
   const tarball = join(directory, packed.filename);
 
   const consumer = join(directory, '独立 中文 项目');
@@ -68,6 +70,10 @@ try {
   assert.deepEqual(Object.keys(installedManifest.dependencies), ['@apidevtools/json-schema-ref-parser']);
   const executable = join(installed, installedManifest.bin.specleaf);
   assert.match(await readFile(executable, 'utf8'), /^#!\/usr\/bin\/env node\r?\n/);
+  if (process.platform === 'win32') {
+    const shim = await readFile(join(consumer, 'node_modules/.bin/specleaf.cmd'), 'utf8');
+    assert.match(shim, /specleaf[\\/]lib[\\/]cli\.js/);
+  }
 
   process.stdout.write('验收 npm scripts、npm exec、npx、临时全局安装…\n');
   const nested = join(consumer, 'nested');
