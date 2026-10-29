@@ -51,6 +51,7 @@ try {
   else {
     // npm changes cwd to the package directory; INIT_CWD retains the invocation directory.
     const sourceCommand = fileURLToPath(import.meta.url) === resolve(projectRoot, 'build/cli.ts');
+    if (process.platform === 'win32') process.stdout.write(`Invocation diagnostics: ${JSON.stringify({ sourceCommand, module: fileURLToPath(import.meta.url), source: resolve(projectRoot, 'build/cli.ts'), event: process.env.npm_lifecycle_event, initial: process.env.INIT_CWD, cwd: process.cwd(), environment: Object.entries(process.env).filter(([key]) => /^(INIT_CWD|npm_lifecycle_event)$/i.test(key)) })}\n`);
     const cwd = sourceCommand && process.env.npm_lifecycle_event === 'generate'
       ? process.env.INIT_CWD || process.cwd() : process.cwd();
     const output = await generate(contractEntry(cwd, args.input!), resolve(cwd, args.output));
