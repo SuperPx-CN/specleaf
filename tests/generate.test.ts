@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, cp, link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { projectRoot } from '../build/generate';
@@ -30,6 +30,66 @@ afterEach(async () => {
 });
 
 describe('生成命令', () => {
+  async function moduleFixture() {
+    const directory = await fixture();
+    await cp(resolve(projectRoot, 'tests/fixtures/modules'), join(directory, 'modules'), { recursive: true });
+    await copyFile(resolve(projectRoot, 'tests/fixtures/module-models.json'), join(directory, 'module-models.json'));
+    return directory;
+  }
+  it('目录生成一个内嵌模块集合的 HTML，保留独立契约及集合标题', async () => {
+    const directory = await moduleFixture();
+    const result = await run(directory, 'modules', '-o', '输出/modules.html');
+    expect(result.code, result.stderr).toBe(0);
+    const html = await readFile(join(directory, '输出/modules.html'), 'utf8');
+    expect(html).toContain('<title>modules · API 文档</title>');
+    const data = html.match(/<script id="specleaf-contract" type="application\/json">(.*?)<\/script>/s)![1];
+    const document = JSON.parse(data);
+    expect(document.kind).toBe('specleaf/modules');
+    expect(document.modules.map((module: any) => module.id)).toEqual(['.', 'team', 'team/子目录 space%/leaf']);
+    expect(document.modules[0].document.paths['/items'].post.summary).toBe('根模块创建');
+    expect(document.modules[1].document.paths['/items'].post.summary).toBe('团队模块创建');
+    expect(data).not.toContain('module-models.json');
+    expect(data).not.toContain(directory);
+    expect(html.match(/<\/script>/g)).toHaveLength(2);
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+(?:stylesheet|modulepreload)/i);
+  });
+
+  it('目录模式保护所有模块入口、共享引用及其链接别名', async () => {
+    const directory = await moduleFixture();
+    const shared = join(directory, 'module-models.json');
+    await symlink(shared, join(directory, 'symbolic.html'));
+    await link(join(directory, 'modules/team/openapi.yml'), join(directory, 'hard.html'));
+    const sources = ['modules/openapi.yaml', 'modules/team/openapi.yml', 'modules/team/子目录 space%/leaf/openapi.json', 'module-models.json', 'symbolic.html', 'hard.html'];
+    for (const source of sources) {
+      const original = await readFile(join(directory, source), 'utf8');
+      const result = await run(directory, 'modules', '-o', source);
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain('禁止输出覆盖入口或引用文件');
+      expect(await readFile(join(directory, source), 'utf8')).toBe(original);
+    }
+  });
+
+  it('目录没有入口、重复入口和模块解析错误均以非零退出并保留已有产物', async () => {
+    const directory = await moduleFixture();
+    const output = join(directory, 'previous.html');
+    await writeFile(output, 'previous');
+    await mkdir(join(directory, 'empty'));
+    let result = await run(directory, 'empty', '-o', output);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('未找到 openapi.yaml');
+    await writeFile(join(directory, 'modules/team/openapi.json'), JSON.stringify(base));
+    result = await run(directory, 'modules', '-o', output);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('多个 OpenAPI 入口');
+    await rm(join(directory, 'modules/team/openapi.json'));
+    await writeFile(join(directory, 'modules/team/openapi.yml'), '{broken');
+    result = await run(directory, 'modules', '-o', output);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('模块「team」解析失败');
+    expect(await readFile(output, 'utf8')).toBe('previous');
+    expect((await readdir(directory)).some((file) => file.endsWith('.tmp'))).toBe(false);
+  });
+
   it('显示帮助，缺少输入、未知参数和多余输入以中文报错并退出', async () => {
     const directory = await fixture();
     const help = await run(directory, '--help');

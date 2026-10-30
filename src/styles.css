@@ -288,6 +288,11 @@ summary {
   padding: 24px 17px 0;
   flex-shrink: 0;
 }
+.search-scope {
+  color: #92909e;
+  font-size: 12px;
+  margin: 0 3px 8px;
+}
 .workspace-label {
   display: flex;
   align-items: center;
@@ -395,6 +400,55 @@ summary {
   scrollbar-width: thin;
   scrollbar-color: #dedbe7 transparent;
   overscroll-behavior: contain;
+}
+.module-group + .module-group {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.module-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  margin-bottom: 3px;
+  border-radius: 6px;
+  color: #6b657b;
+}
+.module-heading:hover, .module-heading.current-module {
+  background: #f0ecfa;
+  color: var(--purple);
+}
+.module-heading > svg {
+  flex-shrink: 0;
+}
+.module-heading > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.module-heading strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.module-heading small {
+  display: block;
+  margin-top: 3px;
+  color: #92909e;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.module-group .group-toggle {
+  min-height: 32px;
+  font-size: 12px;
+}
+.module-empty {
+  padding: 8px 12px;
+  color: #92909e;
+  font-size: 12px;
 }
 .overview-link {
   height: 39px;

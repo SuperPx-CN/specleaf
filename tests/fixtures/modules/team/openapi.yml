@@ -1,0 +1,51 @@
+openapi: 3.1.0
+info:
+  title: 团队模块 API
+  version: '2'
+servers:
+  - url: https://team.example.invalid
+security:
+  - Auth: []
+paths:
+  /items:
+    post:
+      summary: 团队模块创建
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Item'
+            example: { teamField: team }
+      responses:
+        '201':
+          description: 团队模块成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          description: 团队模块鉴权失败
+  /teams:
+    get:
+      summary: 团队列表
+      tags: [团队]
+      responses:
+        '204':
+          description: 空列表
+components:
+  securitySchemes:
+    Auth:
+      type: http
+      scheme: bearer
+      bearerFormat: TeamToken
+  schemas:
+    Item:
+      type: object
+      properties:
+        teamField: { type: number }
+        nested:
+          type: object
+          properties:
+            teamNested: { type: boolean }
+        shared:
+          $ref: '../../module-models.json#/Shared'

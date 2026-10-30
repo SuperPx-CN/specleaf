@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadContract, type Contract } from './contract.ts';
+import { loadDocumentation, type Documentation } from './contract.ts';
+import { documentationTitle, isModuleCollection } from '../src/lib/documentation.ts';
 import { serializeContract } from './serialize.ts';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -13,15 +14,16 @@ export function escapeHtml(value: string): string {
   );
 }
 
-export async function renderHtml(contract: Contract): Promise<string> {
+export async function renderHtml(contract: Pick<Documentation, 'document'>): Promise<string> {
   const assets = new URL('../lib/assets/', import.meta.url);
   const [javascript, stylesheet, favicon] = await Promise.all(
     ['ui.js', 'ui.css', 'favicon.svg'].map((file) => readFile(new URL(file, assets), 'utf8')),
   );
   const script = javascript.replace(/<\/script/gi, '<\\/script');
   const css = stylesheet.replace(/<\/style/gi, '\\3c /style');
-  const title = escapeHtml(contract.document.info.title);
-  const description = escapeHtml(contract.document.info.description || contract.document.info.title);
+  const title = escapeHtml(documentationTitle(contract.document));
+  const description = escapeHtml(isModuleCollection(contract.document) ? contract.document.title
+    : contract.document.info.description || contract.document.info.title);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -65,7 +67,7 @@ async function protectSources(output: string, sources: string[]) {
 }
 
 export async function generate(input: string, destination: string): Promise<string> {
-  const contract = await loadContract(input);
+  const contract = await loadDocumentation(input);
   const output = resolve(destination);
   let temporary: string | undefined;
   try {

@@ -2,11 +2,11 @@
 
 把 OpenAPI 契约变成可离线阅读的单页文档。
 
-把本地 OpenAPI **3.0 / 3.1 YAML 或 JSON** 转成一个可离线阅读的 HTML 文件。界面采用浅紫色主题，提供左侧接口目录、正文和右侧页内目录；窄屏使用目录抽屉。
+把本地 OpenAPI **3.0 / 3.1 YAML 或 JSON 文件或模块目录**转成一个可离线阅读的 HTML 文件。各模块保留独立契约，左侧目录按模块分组展示整个项目的接口。界面采用浅紫色主题，提供左侧接口目录、正文和右侧页内目录；窄屏使用目录抽屉。
 
 ## npm 用户用法
 
-需要 Node.js **22.19.0+** 及 npm。本轮完成 npm CLI 打包，尚未正式发布到 npm。下面的 registry 命令为**发布后的用法**：
+需要 Node.js **22.19.0+** 及 npm。模块目录与全项目分组浏览需要 SpecLeaf **1.1.0+**：
 
 ```bash
 # 临时运行
@@ -30,6 +30,7 @@ npx specleaf ./openapi.yaml
 ```bash
 specleaf ./openapi.yaml
 specleaf ./openapi.json -o ./output/api.html
+specleaf ./docs/apis/management -o ./management.html
 specleaf "/path/中文 目录/openapi.yaml" --output "/path/输出/API 文档.html"
 specleaf --help
 specleaf --version
@@ -55,6 +56,29 @@ specleaf --version
 - **静态托管**：把 HTML 放到任意静态服务器。可重命名为 `index.html`，部署到根目录或 `/reference/` 等子目录；目录 URL 保留末尾 `/`。接口链接采用 Hash，无需配置路由回退。
 - 页面不发送接口请求。Markdown 图片显示为可点击链接，外部示例仅显示地址；生成和阅读均不自动下载图片或远程内容。生产页面还限制了自动联网资源加载。
 
+## 模块目录
+
+目录输入会递归发现准确命名的 `openapi.yaml`、`openapi.yml`、`openapi.json`，每个入口所在目录是一个模块。跳过隐藏目录、`node_modules`、`dist`、`build`、`coverage`，不递归跟随目录符号链接；其他文件只有被 `$ref` 引用时才会解析。忽略目录中的文件仍可被入口显式引用。
+
+例如，下面三个入口会生成一个 HTML，模块 ID 分别是 `.`、`merchant` 和 `merchant/orders`：
+
+```text
+management/
+  openapi.yaml
+  merchant/
+    openapi.yml
+    orders/
+      openapi.json
+```
+
+模块 ID 是相对输入目录的路径，统一使用 `/`，按 ID 排序；默认打开第一个模块。集合标题取输入目录名，左侧目录按模块显示路径、契约标题和接口数量；各模块内按 tags 分组，默认展开全部接口，无需切换模块。目录只有一个模块时仍按模块分组。同目录多个入口、整个目录没有入口或任一模块解析失败，均以中文报错并停止生成；不含入口的中间目录无需创建契约。
+
+每个模块独立解析，保留各自的 OpenAPI 版本、服务地址、鉴权、tags 和引用作用域，支持共享引用、同名模型及同路径接口。缺少 tags 的接口归入“未分组”。目录搜索和方法筛选覆盖**全部模块**，可按模块路径、标题或接口关键词搜索。跨模块打开接口时保留搜索、筛选和分组展开状态；正文概览的统计和导出作用于当前模块，字段树、响应、媒体类型和示例等详情状态会重置。
+
+模块概览链接为 `#/module/<编码后的模块ID>/overview`，接口链接为 `#/module/<编码后的模块ID>/operation/<编码后的接口ID>`；每个 ID 整体通过 `encodeURIComponent` 编码，例如 `merchant/orders` 变成 `merchant%2Forders`。链接可复制、刷新和前进后退，未知模块或接口显示无效链接状态。单文件输入继续使用原来的 `#/overview` 和 `#/operation/<编码后的接口ID>`。
+
+导出得到当前模块合并后的 OpenAPI JSON，文件名为 `openapi-<编码后的模块ID>.json`；根模块为 `openapi-..json`。单文件仍导出 `openapi.json`。模块集合和所需资源全部内嵌，断网后也能浏览全部模块、搜索和导出。
+
 ## 源码开发与默认构建
 
 ```bash
@@ -63,6 +87,7 @@ cd specleaf
 npm ci
 npm run generate -- ./examples/openapi.yaml
 npm run generate -- ./examples/minimal.json -o ./output/api.html
+npm run generate -- ~/coin-operated/backend/docs/apis/management -o ./management.html
 ```
 
 示例、构建脚本和测试均包含在源码中。`generate` 自动准备预编译资源，再执行源码 CLI。从其他目录调用时可用 `--prefix` 指定源码目录，输入和输出仍相对调用目录解析：
@@ -79,7 +104,7 @@ npm run build
 npm run preview
 ```
 
-默认入口为项目内的 `examples/openapi.yaml`，包含跨文件递归模型、组合类型、鉴权、参数和多媒体示例。`examples/minimal.json` 是独立的最小 JSON 示例。开发模式监听入口和跨文件引用；解析失败时显示终端错误与浏览器错误浮层，修复后自动刷新。
+默认入口为项目内的 `examples/openapi.yaml`，包含跨文件递归模型、组合类型、鉴权、参数和多媒体示例。`examples/minimal.json` 是独立的最小 JSON 示例。开发模式监听入口和跨文件引用；目录输入还监听模块入口新增、删除和重复入口修复，更新模块列表。解析失败时显示浏览器错误浮层，修复契约或补齐缺失引用后自动刷新。
 
 `npm run build` 先检查 TypeScript、编译 CLI 和通用界面资源，再生成单文件 **`dist/index.html`**。`npm run preview` 用于本地预览。生成器不会清空输出所在目录；分发文档时只需复制本次生成的 HTML。
 
@@ -88,9 +113,11 @@ npm run preview
 ```bash
 OPENAPI_ENTRY=/absolute/path/to/openapi.yaml npm run dev
 OPENAPI_ENTRY=/absolute/path/to/openapi.yaml npm run build
+OPENAPI_ENTRY=/absolute/path/to/docs/apis/management npm run dev
+OPENAPI_ENTRY=/absolute/path/to/docs/apis/management npm run build
 ```
 
-转换命令 `generate` 使用明确传入的输入文件，不依赖 `OPENAPI_ENTRY`。
+转换命令 `generate` 使用明确传入的输入文件或目录，不依赖 `OPENAPI_ENTRY`。
 
 ## 本地 tarball 验收
 
@@ -104,7 +131,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.0.0.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.0.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```
@@ -158,7 +185,7 @@ paths:
 
 缺少输入、未知参数、多余输入、版本不支持、解析或写入失败时，命令显示中文错误上下文并以非零状态退出。引用错误附带来源文件和 JSON Pointer；远程入口和远程 `$ref` 不受支持。
 
-生成器在内存中生成完整 HTML 后，写入目标同目录的临时文件，最后替换目标文件；失败不会覆盖已有产物。不允许输出覆盖入口或任何被引用文件（包含符号链接和硬链接别名），也不会清空输出目录。更换输出文件或修正错误后重新执行即可。
+生成器在内存中生成完整 HTML 后，写入目标同目录的临时文件，最后替换目标文件；失败不会覆盖已有产物。不允许输出覆盖任何模块入口或任何被引用文件（包含符号链接和硬链接别名），也不会清空输出目录。更换输出文件或修正错误后重新执行即可。
 
 源契约始终只读。支持范围为 OpenAPI 3.0 / 3.1 的 HTTP 接口阅读，不包含 Swagger 2.0、远程契约、在线调试、深色主题或图片打包。解析器不会代替完整的 OpenAPI / JSON Schema 语义校验。
 
@@ -179,12 +206,14 @@ npm run test:e2e
 
 单元及命令测试覆盖 YAML / JSON、跨文件及循环引用、中文空格路径、分组顺序与去重、未声明分组及未分组接口、参数和错误退出、已有产物保护、元数据及脚本闭合字符。全部测试仅使用项目内的通用示例、fixture 和测试时生成的临时文件，可直接在独立源码副本中运行上述验证流程。
 
+模块测试另覆盖三级目录、三种入口格式、目录忽略规则、重复及空目录、共享引用、同名模型、同路径接口与混合版本；浏览器验收覆盖全项目分组目录和搜索、跨模块详情隔离与状态重置、编码链接与历史导航、独立导出、移动布局、无源文件的断网使用，以及开发模式的模块增删、引用变化和错误恢复。tarball 安装后同样验收目录生成和文件保护。
+
 CI 在 Linux、macOS 和 Windows 上分别使用 Node.js 22.19.0 与 24 运行单元测试、类型检查、构建和 tarball 安装验收；Linux 上另运行完整 Chromium 浏览器验收。
 
 ## 源码
 
 ```text
-build/contract.ts         本地契约解析、合并与错误上下文
+build/contract.ts         本地契约解析、模块发现、统一加载与错误上下文
 build/openapi-plugin.ts  开发模式虚拟模块和引用监听
 build/serialize.ts       HTML JSON 数据块的安全序列化
 build/package.ts         预编译 ESM CLI、通用 IIFE、CSS 和图标
@@ -192,6 +221,7 @@ build/generate.ts        读取包内资源、HTML 内嵌与原子写入
 build/cli.ts             specleaf 命令、帮助和版本
 build/build.ts            默认生产构建
 src/lib/openapi.ts        引用、接口、Schema、示例和 cURL 处理
+src/lib/documentation.ts  模块集合类型、标题与模块路由
 src/components.tsx        字段树、参数表、Markdown、示例与复制
 src/App.tsx               目录、概览与接口详情
 examples/                 独立 YAML、JSON 和跨文件模型示例

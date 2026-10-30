@@ -135,8 +135,8 @@ export function collectTags(document: ApiObject, operations: Operation[]): strin
     ]),
   ];
 }
-export const operationHash = (operation: Operation) =>
-  `#/operation/${encodeURIComponent(operation.id)}`;
+export const operationHash = (operation: Operation, moduleId?: string) =>
+  `${moduleId === undefined ? '#' : `#/module/${encodeURIComponent(moduleId)}`}/operation/${encodeURIComponent(operation.id)}`;
 export function operationIdFromHash(hash: string): string | undefined {
   try {
     return hash.startsWith('#/operation/') ? decodeURIComponent(hash.slice(12)) : undefined;
@@ -144,7 +144,7 @@ export function operationIdFromHash(hash: string): string | undefined {
     return undefined;
   }
 }
-export function matchesOperation(operation: Operation, query: string, method: string) {
+export function matchesOperation(operation: Operation, query: string, method: string, context = '') {
   const text = [
     operation.path,
     operation.method,
@@ -152,6 +152,7 @@ export function matchesOperation(operation: Operation, query: string, method: st
     operation.definition.description,
     operation.definition.operationId,
     ...operation.tags,
+    context,
   ]
     .join(' ')
     .toLocaleLowerCase();

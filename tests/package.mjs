@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { access, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, copyFile, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,6 +84,27 @@ try {
   await npm(consumer, 'exec', '--offline', '--', 'specleaf', '入口.yaml', '-o', '输出 目录/引用.html');
   const recursive = await readDocument(join(consumer, '输出 目录/引用.html'));
   assert.equal(recursive.components.schemas.Tree.properties.child.$ref, '#/components/schemas/Tree');
+  await cp(join(root, 'tests/fixtures/modules'), join(consumer, 'modules'), { recursive: true });
+  await copyFile(join(root, 'tests/fixtures/module-models.json'), join(consumer, 'module-models.json'));
+  const modulesOutput = join(consumer, '输出 目录/modules.html');
+  await npm(consumer, 'exec', '--offline', '--', 'specleaf', 'modules', '-o', modulesOutput);
+  const collection = await readDocument(modulesOutput);
+  assert.equal(collection.kind, 'specleaf/modules');
+  assert.deepEqual(collection.modules.map((module) => module.id), ['.', 'team', 'team/子目录 space%/leaf']);
+  assert.deepEqual(collection.modules.map((module) => module.document.openapi), ['3.0.3', '3.1.0', '3.1.1']);
+  assert.equal(collection.modules[0].document.paths['/items'].post.summary, '根模块创建');
+  assert.equal(collection.modules[1].document.paths['/items'].post.summary, '团队模块创建');
+  assert.doesNotMatch(JSON.stringify(collection), /module-models.json/);
+  for (const source of ['modules/openapi.yaml', 'modules/team/openapi.yml', 'modules/team/子目录 space%/leaf/openapi.json', 'module-models.json']) {
+    const original = await readFile(join(consumer, source), 'utf8');
+    await fails(consumer, executable, ['modules', '-o', source], /禁止输出覆盖入口或引用文件/);
+    assert.equal(await readFile(join(consumer, source), 'utf8'), original);
+  }
+  const previousModules = await readFile(modulesOutput, 'utf8');
+  await writeFile(join(consumer, 'modules/team/openapi.json'), JSON.stringify(base));
+  await fails(consumer, executable, ['modules', '-o', modulesOutput], /多个 OpenAPI 入口/);
+  assert.equal(await readFile(modulesOutput, 'utf8'), previousModules);
+  await rm(join(consumer, 'modules/team/openapi.json'));
   const npxCli = join(dirname(npmCli), 'npx-cli.js');
   await exec(process.execPath, [npxCli, '--offline', 'specleaf', 'minimal.json'], { cwd: consumer, env, timeout: 30000 });
   assert.equal((await readDocument(join(consumer, 'openapi.html'))).openapi, '3.0.3');

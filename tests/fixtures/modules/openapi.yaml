@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: 根模块 API
+  version: '1'
+servers:
+  - url: https://root.example.invalid
+security:
+  - Auth: []
+paths:
+  /items:
+    post:
+      summary: 根模块创建
+      tags: [资源]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Item'
+            examples:
+              first:
+                value: { rootField: first }
+              second:
+                value: { rootField: second }
+          text/plain:
+            example: root text
+      responses:
+        '200':
+          description: 根模块成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 根模块失败
+components:
+  securitySchemes:
+    Auth:
+      type: apiKey
+      in: header
+      name: X-Root-Key
+  schemas:
+    Item:
+      type: object
+      properties:
+        rootField: { type: string }
+        nested:
+          type: object
+          properties:
+            rootNested: { type: string }
+        shared:
+          $ref: '../module-models.json#/Shared'

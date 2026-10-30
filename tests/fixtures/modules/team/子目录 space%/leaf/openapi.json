@@ -1,0 +1,24 @@
+{
+  "openapi": "3.1.1",
+  "info": { "title": "叶子模块 API", "version": "3" },
+  "paths": {
+    "/items": {
+      "post": {
+        "summary": "叶子模块创建",
+        "responses": {
+          "202": {
+            "description": "已接受",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Item" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "properties": { "leafField": { "type": "integer" } } }
+    }
+  }
+}

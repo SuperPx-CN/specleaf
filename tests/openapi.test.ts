@@ -269,6 +269,9 @@ describe('文档模型', () => {
     expect(matchesOperation(operation, 'commerce', '')).toBe(true);
     expect(matchesOperation(operation, '订单', '')).toBe(false);
     expect(matchesOperation(operation, '商品', 'post')).toBe(false);
+    expect(matchesOperation(operation, 'inventory 商品', 'get', 'inventory 库存模块')).toBe(true);
+    expect(matchesOperation(operation, '库存', '', 'inventory 库存模块')).toBe(true);
+    expect(matchesOperation(operation, '库存', 'post', 'inventory 库存模块')).toBe(false);
   });
   it('cURL 按 OR 鉴权方案、全局继承、表单和 shell 引号生成模板', () => {
     const document = {

@@ -25,7 +25,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import document from 'virtual:openapi';
+import documentation from 'virtual:openapi';
+import { documentationRoute, isModuleCollection, overviewHash, type DocumentationModule, type DocumentationRoute } from './lib/documentation';
 import {
   CodeBlock,
   CopyButton,
@@ -46,14 +47,11 @@ import {
   METHODS,
   object,
   operationHash,
-  operationIdFromHash,
   resolveObject,
   type ApiObject,
   type Operation,
 } from './lib/openapi';
 
-const operations = collectOperations(document);
-const tags = collectTags(document, operations);
 const initialExpanded = () => new Set<string>([]);
 const icons = [KeyRound, ShieldCheck, Database, Layers3, Globe2, Code2, FileText, Hash];
 const overviewOutline = [
@@ -68,22 +66,59 @@ const operationOutline = [
 
 export default function App() {
   const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const update = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+  const collection = isModuleCollection(documentation) ? documentation : undefined;
+  const route = documentationRoute(hash, collection?.modules);
+  const current = collection?.modules.find((module) => module.id === route.moduleId);
+  const document: ApiObject = collection ? current?.document ?? { info: { title: collection.title }, paths: {} }
+    : documentation as ApiObject;
+  return <DocumentationView
+    document={document}
+    title={collection?.title ?? document.info.title}
+    modules={collection?.modules}
+    moduleId={current?.id}
+    route={route}
+  />;
+}
+
+function DocumentationView({ document, title, modules, moduleId, route }: {
+  document: ApiObject;
+  title: string;
+  modules?: DocumentationModule[];
+  moduleId?: string;
+  route: DocumentationRoute;
+}) {
+  const operations = useMemo(() => collectOperations(document), [document]);
+  const tags = useMemo(() => collectTags(document, operations), [document, operations]);
+  const overview = overviewHash(moduleId ?? modules?.[0]?.id);
   const [query, setQuery] = useState('');
   const [method, setMethod] = useState('');
   const [expanded, setExpanded] = useState(initialExpanded);
+  const [collapsed, setCollapsed] = useState(initialExpanded);
   const [drawer, setDrawer] = useState(false);
   const [activeSection, setActiveSection] = useState('introduction');
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 800px)').matches);
   const searchRef = useRef<HTMLInputElement>(null);
-  const selectedId = operationIdFromHash(hash);
-  const selected = operations.find((operation) => operation.id === selectedId);
-  const unknown =
-    hash !== '' && hash !== '#' && hash !== '#/' && hash !== '#/overview' && !selected;
+  const selected = !route.invalid && (!modules || moduleId !== undefined)
+    ? operations.find((operation) => operation.id === route.operationId) : undefined;
+  const unknown = route.invalid || (!!modules && moduleId === undefined) || (route.operationId !== undefined && !selected);
   const outline = unknown ? [] : selected ? operationOutline : overviewOutline;
-  const filtered = useMemo(
-    () => operations.filter((operation) => matchesOperation(operation, query, method)),
-    [query, method],
-  );
+  const navigation = useMemo(() => modules
+    ? modules.map((module) => {
+      const operations = collectOperations(module.document);
+      return { moduleId: module.id, document: module.document, operations, tags: collectTags(module.document, operations) };
+    }) : [{ moduleId: undefined, document, operations, tags }], [modules, document, operations, tags]);
+  const filtered = useMemo(() => navigation.map((group) => ({
+    ...group,
+    operations: group.operations.filter((operation) => matchesOperation(operation, query, method,
+      modules ? `${group.moduleId} ${group.document.info.title}` : '')),
+  })), [navigation, query, method, modules]);
+  const totalCount = navigation.reduce((count, group) => count + group.operations.length, 0);
+  const filteredCount = filtered.reduce((count, group) => count + group.operations.length, 0);
   const filtering = !!query.trim() || !!method;
   useEffect(() => {
     const media = window.matchMedia('(max-width: 800px)');
@@ -93,7 +128,6 @@ export default function App() {
   }, []);
   useEffect(() => {
     const update = () => {
-      setHash(window.location.hash);
       setDrawer(false);
       window.scrollTo(0, 0);
       window.document.getElementById('main')?.focus({ preventScroll: true });
@@ -117,8 +151,12 @@ export default function App() {
     window.document.title = selected
       ? `${selected.definition.summary || selected.path} · ${document.info.title}`
       : `${document.info.title} · API 文档`;
-    if (selected) setExpanded((previous) => new Set([...previous, ...selected.tags]));
-  }, [selected]);
+    if (selected) {
+      if (modules) setCollapsed((previous) => new Set([...previous].filter((key) =>
+        !selected.tags.some((tag) => key === JSON.stringify([moduleId, tag])))));
+      else setExpanded((previous) => new Set([...previous, ...selected.tags]));
+    }
+  }, [selected, document, modules, moduleId]);
   useEffect(() => {
     let frame = 0;
     const update = () => {
@@ -144,7 +182,7 @@ export default function App() {
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [selected, unknown]);
+  }, [selected, unknown, document]);
   useEffect(() => {
     if (!drawer) return;
     const previous = window.document.body.style.overflow;
@@ -177,19 +215,26 @@ export default function App() {
         window.document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus();
     };
   }, [drawer]);
-  function toggle(tag: string) {
-    setExpanded((previous) => {
+  function toggle(tag: string, scope?: string) {
+    const key = modules ? JSON.stringify([scope, tag]) : tag;
+    const update = modules ? setCollapsed : setExpanded;
+    update((previous) => {
       const next = new Set(previous);
-      next.has(tag) ? next.delete(tag) : next.add(tag);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   }
   function openTag(tag: string) {
     setQuery('');
     setMethod('');
-    setExpanded((previous) => new Set(previous).add(tag));
+    if (modules) setCollapsed((previous) => {
+      const next = new Set(previous);
+      next.delete(JSON.stringify([moduleId, tag]));
+      return next;
+    });
+    else setExpanded((previous) => new Set(previous).add(tag));
     const first = operations.find((operation) => operation.tags.includes(tag));
-    if (first) window.location.hash = operationHash(first);
+    if (first) window.location.hash = operationHash(first, moduleId);
   }
   function download() {
     const url = URL.createObjectURL(
@@ -197,7 +242,7 @@ export default function App() {
     );
     const link = window.document.createElement('a');
     link.href = url;
-    link.download = 'openapi.json';
+    link.download = moduleId === undefined ? 'openapi.json' : `openapi-${encodeURIComponent(moduleId)}.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -221,19 +266,20 @@ export default function App() {
         >
           <Menu size={21} />
         </button>
-        <a className="brand" href="#/overview">
+        <a className="brand" href={overview}>
           <span className="brand-symbol">
             <Code2 size={23} strokeWidth={2.5} />
           </span>
-          <span className="brand-name" title={document.info.title}>
-            {document.info.title}
+          <span className="brand-name" title={title}>
+            {title}
           </span>
         </a>
         <nav className="top-nav" aria-label="主导航">
-          <a className="active" href="#/overview">
+          <a className="active" href={overview}>
             API 文档
           </a>
-          <button onClick={download}>
+          <button onClick={download} disabled={!!modules && moduleId === undefined}
+            title={modules ? `导出当前模块：${document.info.title}` : undefined}>
             <ArrowDownToLine size={15} /> 导出 OpenAPI
           </button>
         </nav>
@@ -242,7 +288,7 @@ export default function App() {
             <span />
             {document.info.version || '未指定版本'}
           </span>
-          <a className="help-link" href="#/overview" aria-label="文档概览">
+          <a className="help-link" href={overview} aria-label="文档概览">
             <CircleHelp size={19} />
           </a>
         </div>
@@ -265,8 +311,8 @@ export default function App() {
               <Layers3 size={17} />
             </span>
             <div>
-              <strong>{document.info.title}</strong>
-              <span>接口参考手册</span>
+              <strong>{title}</strong>
+              <span>{modules ? `${modules.length} 个模块 · ${totalCount} 个接口` : '接口参考手册'}</span>
             </div>
             <button
               className="close-drawer icon-button"
@@ -277,12 +323,13 @@ export default function App() {
             </button>
             <ChevronDown size={14} className="desktop-chevron" />
           </div>
+          {modules && <p className="search-scope">搜索范围：全部模块</p>}
           <div className="search-box">
             <Search size={16} />
             <input
               ref={searchRef}
               aria-label="搜索接口"
-              placeholder="搜索接口、路径或关键词"
+              placeholder={modules ? '搜索全部模块、接口或路径' : '搜索接口、路径或关键词'}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -310,71 +357,45 @@ export default function App() {
                 </option>
               ))}
             </select>
-            <span>{filtered.length} 个接口</span>
+            <span>{filteredCount} 个接口</span>
           </div>
         </div>
         <nav className="sidebar-scroll" aria-label="接口分组">
-          <a
+          {!modules && <a
             className={`overview-link ${!selected && !unknown ? 'selected' : ''}`}
-            href="#/overview"
+            href={overview}
             onClick={() => setDrawer(false)}
           >
             <BookOpen size={17} />
             文档概览
             <ChevronRight size={14} />
-          </a>
+          </a>}
           <div className="nav-caption">
-            接口目录 <span>{tags.length} 个分组</span>
+            接口目录 <span>{modules ? `${modules.length} 个模块` : `${tags.length} 个分组`}</span>
           </div>
-          {tags.map((tag) => {
-            const items = filtered.filter((operation) => operation.tags.includes(tag));
-            if (filtering && !items.length) return null;
-            const open = filtering || expanded.has(tag);
-            return (
-              <div className="nav-group" key={tag}>
-                <button className="group-toggle" onClick={() => toggle(tag)} aria-expanded={open}>
-                  <ChevronRight size={13} className={open ? 'rotated' : ''} />
-                  <Folder size={15} />
-                  <span title={tag}>{tag}</span>
-                  <span className="group-count">{items.length}</span>
-                </button>
-                {open && (
-                  <div className="group-operations">
-                    {items.map((operation) => {
-                      const status = getApiStatus(operation.definition);
-                      return (
-                        <a
-                          key={operation.id}
-                          href={operationHash(operation)}
-                          className={`operation-link ${selected?.id === operation.id ? 'selected' : ''}`}
-                          onClick={() => setDrawer(false)}
-                          title={`${operation.method.toUpperCase()} ${operation.path}`}
-                        >
-                          <span className={`method method-${operation.method}`}>
-                            {operation.method.toUpperCase()}
-                          </span>
-                          <span className="operation-link-title">
-                            {operation.definition.summary || operation.path}
-                          </span>
-                          {status && (
-                            <span
-                              className={`api-status-dot api-status-${status}`}
-                              role="img"
-                              aria-label={`接口状态：${API_STATUS_LABELS[status]}`}
-                              title={`接口状态：${API_STATUS_LABELS[status]}`}
-                            />
-                          )}
-                        </a>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
+          {filtered.map((group) => {
+            if (filtering && !group.operations.length) return null;
+            const links = <OperationGroups tags={group.tags} operations={group.operations}
+              moduleId={group.moduleId} selected={moduleId === group.moduleId ? selected : undefined}
+              isOpen={(tag) => filtering || (modules ? !collapsed.has(JSON.stringify([group.moduleId, tag])) : expanded.has(tag))}
+              filtering={filtering} onToggle={(tag) => toggle(tag, group.moduleId)} onNavigate={() => setDrawer(false)} />;
+            return modules ? (
+              <section className="module-group" key={group.moduleId} aria-label={`模块 ${group.moduleId} · ${group.document.info.title}`}>
+                <a className={`module-heading ${moduleId === group.moduleId ? 'current-module' : ''}`}
+                  href={overviewHash(group.moduleId)} aria-current={moduleId === group.moduleId && !selected && !unknown ? 'page' : undefined}
+                  aria-label={`模块概览：${group.moduleId} · ${group.document.info.title}`} onClick={() => setDrawer(false)}>
+                  <Layers3 size={16} />
+                  <span><strong>{group.document.info.title}</strong><small title={group.moduleId}>{group.moduleId}</small></span>
+                  <span className="group-count">{group.operations.length}</span>
+                </a>
+                {links}
+                {!group.operations.length && <div className="module-empty">该模块暂无接口定义</div>}
+              </section>
+            ) : <div key="single">{links}</div>;
           })}
-          {operations.length === 0 ? (
-            <div className="search-empty"><FileText size={25} /><strong>当前契约暂无接口定义</strong></div>
-          ) : filtered.length === 0 && (
+          {totalCount === 0 ? (
+            <div className="search-empty"><FileText size={25} /><strong>{modules ? '当前项目暂无接口定义' : '当前契约暂无接口定义'}</strong></div>
+          ) : filteredCount === 0 && (
             <div className="search-empty">
               <Search size={25} />
               <strong>没有找到相关接口</strong>
@@ -401,6 +422,7 @@ export default function App() {
             <span>开发者文档</span>
             <ChevronRight size={13} />
             <span>API 文档</span>
+            {modules && <><ChevronRight size={13} /><span>{moduleId ?? '无效模块'}</span></>}
             {selected && (
               <>
                 <ChevronRight size={13} />
@@ -411,16 +433,16 @@ export default function App() {
           {unknown ? (
             <div className="not-found">
               <FileText size={40} />
-              <h1>未找到该接口</h1>
-              <p>链接中的接口可能已在契约更新后移除。</p>
-              <a href="#/overview">
+              <h1>{modules && moduleId === undefined ? '未找到该模块' : '未找到该接口'}</h1>
+              <p>链接无效，或对应的{modules && moduleId === undefined ? '模块' : '接口'}已在契约更新后移除。</p>
+              <a href={overview}>
                 返回文档概览 <ArrowRight size={15} />
               </a>
             </div>
           ) : selected ? (
-            <OperationDetail key={selected.id} operation={selected} />
+            <OperationDetail key={JSON.stringify([moduleId, selected.id])} document={document} operation={selected} moduleId={moduleId} />
           ) : (
-            <Overview onOpenTag={openTag} onDownload={download} />
+            <Overview key={moduleId} document={document} operations={operations} tags={tags} moduleId={moduleId} onOpenTag={openTag} onDownload={download} />
           )}
           <footer className="page-footer">
             <span>{document.info.title} · API Reference</span>
@@ -455,10 +477,60 @@ export default function App() {
   );
 }
 
+function OperationGroups({ tags, operations, moduleId, selected, isOpen, filtering, onToggle, onNavigate }: {
+  tags: string[];
+  operations: Operation[];
+  moduleId?: string;
+  selected?: Operation;
+  isOpen: (tag: string) => boolean;
+  filtering: boolean;
+  onToggle: (tag: string) => void;
+  onNavigate: () => void;
+}) {
+  return tags.map((tag) => {
+    const items = operations.filter((operation) => operation.tags.includes(tag));
+    if (filtering && !items.length) return null;
+    const open = isOpen(tag);
+    return (
+      <div className="nav-group" key={tag}>
+        <button className="group-toggle" onClick={() => onToggle(tag)} aria-expanded={open}>
+          <ChevronRight size={13} className={open ? 'rotated' : ''} />
+          <Folder size={15} />
+          <span title={tag}>{tag}</span>
+          <span className="group-count">{items.length}</span>
+        </button>
+        {open && (
+          <div className="group-operations">
+            {items.map((operation) => {
+              const status = getApiStatus(operation.definition);
+              return (
+                <a key={operation.id} href={operationHash(operation, moduleId)}
+                  className={`operation-link ${selected?.id === operation.id ? 'selected' : ''}`}
+                  onClick={onNavigate} aria-current={selected?.id === operation.id ? 'page' : undefined}
+                  title={`${operation.method.toUpperCase()} ${operation.path}`}>
+                  <span className={`method method-${operation.method}`}>{operation.method.toUpperCase()}</span>
+                  <span className="operation-link-title">{operation.definition.summary || operation.path}</span>
+                  {status && <span className={`api-status-dot api-status-${status}`} role="img"
+                    aria-label={`接口状态：${API_STATUS_LABELS[status]}`} title={`接口状态：${API_STATUS_LABELS[status]}`} />}
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  });
+}
+
 function Overview({
+  document, operations, tags, moduleId,
   onOpenTag,
   onDownload,
 }: {
+  document: ApiObject;
+  operations: Operation[];
+  tags: string[];
+  moduleId?: string;
   onOpenTag: (tag: string) => void;
   onDownload: () => void;
 }) {
@@ -566,7 +638,7 @@ function Overview({
                   label="cURL"
                   copyLabel="复制 cURL"
                 />
-                <a href={operationHash(exampleOperation)}>
+                <a href={operationHash(exampleOperation, moduleId)}>
                   查看 {exampleOperation.definition.summary || exampleOperation.path}
                   <ArrowRight size={14} />
                 </a>
@@ -651,7 +723,7 @@ function Overview({
     </>
   );
 }
-function Authentication({ operation }: { operation: Operation }) {
+function Authentication({ document, operation }: { document: ApiObject; operation: Operation }) {
   const requirements = operation.definition.security ?? document.security ?? [];
   if (!requirements.length)
     return (
@@ -714,7 +786,7 @@ function Authentication({ operation }: { operation: Operation }) {
   );
 }
 
-function Responses({ operation }: { operation: Operation }) {
+function Responses({ document, operation }: { document: ApiObject; operation: Operation }) {
   const responses = object(operation.definition.responses);
   const codes = Object.keys(responses);
   const [status, setStatus] = useState(codes[0]);
@@ -842,11 +914,11 @@ function Policies({ definition }: { definition: ApiObject }) {
   );
 }
 
-function OperationDetail({ operation }: { operation: Operation }) {
+function OperationDetail({ document, operation, moduleId }: { document: ApiObject; operation: Operation; moduleId?: string }) {
   const definition = operation.definition;
   const status = getApiStatus(definition);
   const body = resolveObject(document, definition.requestBody);
-  const link = new URL(operationHash(operation), window.location.href).href;
+  const link = new URL(operationHash(operation, moduleId), window.location.href).href;
   const parametersByLocation = ['path', 'query', 'header', 'cookie']
     .map((location) => ({
       location,
@@ -911,7 +983,7 @@ function OperationDetail({ operation }: { operation: Operation }) {
         )}
       </section>
       <Section id="authentication" title="身份认证">
-        <Authentication operation={operation} />
+        <Authentication document={document} operation={operation} />
       </Section>
       <Section
         id="parameters"
@@ -955,7 +1027,7 @@ function OperationDetail({ operation }: { operation: Operation }) {
         )}
       </Section>
       <Section id="responses" title="返回响应" subtitle="状态码、响应模型与原始示例">
-        <Responses operation={operation} />
+        <Responses document={document} operation={operation} />
       </Section>
       <Section id="policies" title="操作策略" subtitle="保留扩展字段原名，便于对照契约">
         <Policies definition={definition} />

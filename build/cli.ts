@@ -7,7 +7,8 @@ import { generate, projectRoot } from './generate.ts';
 
 const help = `用法：specleaf <input> [-o <output.html>]
 
-把本地 OpenAPI 3.0 / 3.1 YAML 或 JSON 转为单个离线 HTML。
+把本地 OpenAPI 3.0 / 3.1 YAML / JSON 文件或模块目录转为单个离线 HTML。
+目录递归发现 openapi.yaml、openapi.yml、openapi.json，各模块独立浏览。
 输入、输出路径相对调用目录解析，默认输出 ./openapi.html。
 
 选项：
@@ -34,10 +35,10 @@ export function parseArguments(args: string[]): { input?: string; output: string
       if (!output) throw new Error('--output 缺少输出文件路径。');
     } else if (!positional && argument.startsWith('-')) {
       throw new Error(`未知参数：${argument}`);
-    } else if (input) throw new Error(`只能指定一个输入文件，多余输入：${argument}`);
+    } else if (input) throw new Error(`只能指定一个输入文件或目录，多余输入：${argument}`);
     else input = argument;
   }
-  if (!input) throw new Error('缺少 OpenAPI 输入文件。');
+  if (!input) throw new Error('缺少 OpenAPI 输入文件或模块目录。');
   return { input, output };
 }
 
