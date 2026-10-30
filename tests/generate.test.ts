@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { projectRoot } from '../build/generate';
 import { serializeContract } from '../build/serialize';
+import { collectOperations } from '../src/lib/openapi';
 
 const exec = promisify(execFile);
 const directories: string[] = [];
@@ -30,6 +31,21 @@ afterEach(async () => {
 });
 
 describe('生成命令', () => {
+  it('单文件与目录输入均合并路径文件反向指向入口的引用', async () => {
+    const directory = await fixture();
+    const source = resolve(projectRoot, 'tests/fixtures/backrefs');
+    for (const input of [join(source, 'openapi.yaml'), source]) {
+      const result = await run(directory, input);
+      expect(result.code, result.stderr).toBe(0);
+      const html = await readFile(join(directory, 'openapi.html'), 'utf8');
+      const data = JSON.parse(html.match(/<script id="specleaf-contract" type="application\/json">(.*?)<\/script>/s)![1]);
+      const document = data.modules ? data.modules[0].document : data;
+      const [operation] = collectOperations(document);
+      expect(operation.parameters.map((parameter) => parameter.name)).toEqual(['page', 'otherPage']);
+      expect(operation.definition.responses['200'].$ref).toMatch(/^#/);
+    }
+  });
+
   async function moduleFixture() {
     const directory = await fixture();
     await cp(resolve(projectRoot, 'tests/fixtures/modules'), join(directory, 'modules'), { recursive: true });

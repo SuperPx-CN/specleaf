@@ -1,0 +1,18 @@
+openapi: 3.0.3
+info:
+  title: 独立参数模块
+  version: '2'
+paths:
+  /other:
+    get:
+      summary: 其他模块查询
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '204': { description: 无响应体 }
+components:
+  parameters:
+    Page:
+      name: otherPage
+      in: query
+      schema: { type: integer, default: 90 }

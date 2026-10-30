@@ -75,6 +75,8 @@ management/
 
 每个模块独立解析，保留各自的 OpenAPI 版本、服务地址、鉴权、tags 和引用作用域，支持共享引用、同名模型及同路径接口。缺少 tags 的接口归入“未分组”。目录搜索和方法筛选覆盖**全部模块**，可按模块路径、标题或接口关键词搜索。跨模块打开接口时保留搜索、筛选和分组展开状态；正文概览的统计和导出作用于当前模块，字段树、响应、媒体类型和示例等详情状态会重置。
 
+路径文件可以反向引用主入口中的参数、响应、请求体和模型，例如 `paths/items.yaml` 中的 `../openapi.yaml#/components/parameters/Page`。生成时会按引用原文件的路径归并为内部引用，保留递归模型；示例、默认值和扩展数据中的字面 `$ref` 不会改写。此行为也适用于单文件入口。
+
 模块概览链接为 `#/module/<编码后的模块ID>/overview`，接口链接为 `#/module/<编码后的模块ID>/operation/<编码后的接口ID>`；每个 ID 整体通过 `encodeURIComponent` 编码，例如 `merchant/orders` 变成 `merchant%2Forders`。链接可复制、刷新和前进后退，未知模块或接口显示无效链接状态。单文件输入继续使用原来的 `#/overview` 和 `#/operation/<编码后的接口ID>`。
 
 导出得到当前模块合并后的 OpenAPI JSON，文件名为 `openapi-<编码后的模块ID>.json`；根模块为 `openapi-..json`。单文件仍导出 `openapi.json`。模块集合和所需资源全部内嵌，断网后也能浏览全部模块、搜索和导出。
@@ -131,7 +133,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.0.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.1.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```
@@ -214,6 +216,7 @@ CI 在 Linux、macOS 和 Windows 上分别使用 Node.js 22.19.0 与 24 运行�
 
 ```text
 build/contract.ts         本地契约解析、模块发现、统一加载与错误上下文
+build/references.ts       引用来源追踪、入口返回引用归并与离线引用检查
 build/openapi-plugin.ts  开发模式虚拟模块和引用监听
 build/serialize.ts       HTML JSON 数据块的安全序列化
 build/package.ts         预编译 ESM CLI、通用 IIFE、CSS 和图标

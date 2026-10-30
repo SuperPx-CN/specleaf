@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: 跨文件返回引用 API
+  version: '1'
+paths:
+  /items:
+    $ref: ./paths/items.yaml
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+  responses:
+    Success:
+      description: 查询成功
+      headers:
+        X-Total:
+          $ref: '#/components/headers/Total'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Item'
+    Invalid:
+      description: 参数无效
+  headers:
+    Total:
+      schema: { type: integer }
+  requestBodies:
+    Item:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Item'
+          example:
+            $ref: ../openapi.yaml#/components/parameters/Page
+  schemas:
+    Item:
+      $ref: ./schemas.yaml#/Item

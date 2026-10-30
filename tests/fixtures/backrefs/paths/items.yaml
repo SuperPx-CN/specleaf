@@ -1,0 +1,19 @@
+parameters:
+  - $ref: ../openapi.yaml#/components/parameters/Page
+get:
+  summary: 跨文件查询
+  parameters:
+    - $ref: ../other/openapi.yaml#/components/parameters/Page
+  responses:
+    '200':
+      $ref: ../openapi.yaml#/components/responses/Success
+    '400':
+      $ref: ../openapi.yaml#/components/responses/Invalid
+post:
+  summary: 跨文件创建
+  requestBody:
+    $ref: ../openapi.yaml#/components/requestBodies/Item
+    description: 创建请求覆盖说明
+  responses:
+    '201':
+      $ref: ../openapi.yaml#/components/responses/Success

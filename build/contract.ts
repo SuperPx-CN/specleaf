@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import type { ApiObject } from '../src/lib/openapi.ts';
 import { pointerEscape } from '../src/lib/openapi.ts';
 import type { DocumentationDocument, DocumentationModule } from '../src/lib/documentation.ts';
+import { rootReferenceTracker } from './references.ts';
 
 export interface Contract {
   document: ApiObject;
@@ -79,9 +80,10 @@ export async function loadContract(entry: string): Promise<Contract> {
   entry = contractEntry(process.cwd(), entry);
   const parser = new $RefParser();
   try {
+    const references = rootReferenceTracker(entry, literalPayload);
     const document = (await parser.bundle(entry, {
       resolve: { http: false },
-      parse: { binary: false, text: false },
+      parse: { ...references.parsers, binary: false, text: false },
       resolveExcludedPathMatcher: literalPayload,
       bundle: { excludedPathMatcher: literalPayload },
     })) as ApiObject;
@@ -94,6 +96,7 @@ export async function loadContract(entry: string): Promise<Contract> {
       Array.isArray(document.paths)
     )
       throw new Error('契约必须包含 info.title 和 paths 对象。');
+    references.internalize(document);
     return { document, files: parser.$refs.paths(), entry };
   } catch (cause) {
     const error = cause as Error & { source?: string; path?: string[]; targetToken?: string };

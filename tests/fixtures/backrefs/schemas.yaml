@@ -1,0 +1,6 @@
+Item:
+  type: object
+  properties:
+    label: { type: string }
+    child:
+      $ref: ./openapi.yaml#/components/schemas/Item

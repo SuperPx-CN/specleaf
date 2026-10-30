@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DocumentationLoadError, loadContract, loadDocumentation } from '../build/contract';
-import { collectOperations, operationHash, resolveObject } from '../src/lib/openapi';
+import { collectOperations, operationHash, resolveObject, resolveSchema } from '../src/lib/openapi';
 import { documentationRoute, isModuleCollection, overviewHash } from '../src/lib/documentation';
 
 const directories: string[] = [];
@@ -17,6 +17,33 @@ async function temporary() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 
 describe('模块文档加载', () => {
+  it.each(['3.0.3', '3.1.0'])('OpenAPI %s 的外部路径文件可反向引用入口参数、响应、请求体及递归模型', async (version) => {
+    const directory = join(await temporary(), '中文 空格 %23#');
+    await cp(resolve('tests/fixtures/backrefs'), directory, { recursive: true });
+    const entry = join(directory, 'openapi.yaml');
+    await writeFile(entry, (await readFile(entry, 'utf8')).replace('openapi: 3.1.0', `openapi: ${version}`));
+    const { document, files } = await loadContract(entry);
+    expect(files).toHaveLength(4);
+    const [get, post] = collectOperations(document);
+    expect(get.parameters.map((parameter) => [parameter.name, parameter.schema.default])).toEqual([
+      ['page', 1], ['otherPage', 90],
+    ]);
+    const response = resolveObject(document, get.definition.responses['200']);
+    expect(response.description).toBe('查询成功');
+    expect(resolveObject(document, response.headers['X-Total']).schema.type).toBe('integer');
+    expect(resolveObject(document, get.definition.responses['400']).description).toBe('参数无效');
+    const body = resolveObject(document, post.definition.requestBody);
+    expect(body.description).toBe('创建请求覆盖说明');
+    expect(body.content['application/json'].example.$ref).toBe('../openapi.yaml#/components/parameters/Page');
+    const item = resolveSchema(document, body.content['application/json'].schema);
+    expect(item.properties.label.type).toBe('string');
+    expect(item.properties.child.$ref).toMatch(/^#/);
+    expect(resolveSchema(document, item.properties.child).properties.label.type).toBe('string');
+    expect(() => JSON.stringify(document)).not.toThrow();
+    const collection = (await loadDocumentation(directory)).document;
+    expect(collection.modules.map(({ document }: any) => collectOperations(document).length)).toEqual([2, 1]);
+  });
+
   it('三级目录、三种格式、根模块、混合版本及排序；构建元数据不进入集合', async () => {
     const result = await loadDocumentation(fixture);
     expect(isModuleCollection(result.document)).toBe(true);

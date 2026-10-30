@@ -105,6 +105,16 @@ try {
   await fails(consumer, executable, ['modules', '-o', modulesOutput], /多个 OpenAPI 入口/);
   assert.equal(await readFile(modulesOutput, 'utf8'), previousModules);
   await rm(join(consumer, 'modules/team/openapi.json'));
+  await cp(join(root, 'tests/fixtures/backrefs'), join(consumer, 'backrefs'), { recursive: true });
+  for (const input of ['backrefs/openapi.yaml', 'backrefs']) {
+    const output = join(consumer, '输出 目录/backrefs.html');
+    await cli(consumer, executable, input, '-o', output);
+    const data = await readDocument(output);
+    const document = data.modules ? data.modules[0].document : data;
+    assert.match(document.paths['/items'].parameters[0].$ref, /^#/);
+    assert.match(document.paths['/items'].get.responses['200'].$ref, /^#/);
+    assert.equal(document.components.requestBodies.Item.content['application/json'].example.$ref, '../openapi.yaml#/components/parameters/Page');
+  }
   const npxCli = join(dirname(npmCli), 'npx-cli.js');
   await exec(process.execPath, [npxCli, '--offline', 'specleaf', 'minimal.json'], { cwd: consumer, env, timeout: 30000 });
   assert.equal((await readDocument(join(consumer, 'openapi.html'))).openapi, '3.0.3');
