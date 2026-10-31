@@ -133,7 +133,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.2.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.3.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```
@@ -148,7 +148,8 @@ npx specleaf --version
 - 使用方法和路径生成稳定 Hash，支持复制、刷新、前进和后退。右侧页内目录随滚动高亮；提供空契约、无结果和无效链接状态。
 - 展示 Path / Query / Header / Cookie 参数、鉴权、响应状态码、响应头和扩展策略。操作参数覆盖同名同位置的路径参数。
 - 接口目录用彩色圆点展示接口状态，并提供中文状态说明；详情页展示对应的中文徽标。
-- 字段树保留递归引用、数组、空值、布尔 Schema、`allOf` / `oneOf` / `anyOf` 分支、必填及常用约束，最多展开 32 层。常用约束以简短中文展示，长度与数量范围合并；正则与原始 Schema 约束收在默认折叠的“详细校验规则”中，导出的契约保留完整规则。
+- 参数、请求体和响应的字段树统一合并展示 `allOf`：字段按首次出现的顺序排列，同名字段只显示一行，必填集合取并集，子属性和数组元素继续合并，非重复说明与校验约束均保留。可直接表达的结构显示为普通对象、数组或字段；依赖原分支作用域、存在冲突或无法安全归并的规则，使用中文说明并保留所有来源，收在默认折叠的“组合约束”中。
+- 字段树保留 `oneOf` / `anyOf` 备选分支、递归引用、数组、空值、布尔 Schema、必填及常用约束，沿各分支引用路径检测循环，最多展开 32 层。常用约束以简短中文展示，长度与数量范围合并；正则与原始 Schema 约束收在默认折叠的“详细校验规则”中。合并仅用于展示，原始示例、引用解析、CLI 接口和导出的契约结构保持原样。
 - 请求与响应可切换媒体类型和多个**原始示例**。JSON、纯文本和 YAML 按原始值展示，无示例时明确提示；不根据 Schema 编造数据。
 - 可复制接口路径、分享链接、示例和 cURL，导出合并后的 OpenAPI JSON。Clipboard API 不可用或拒绝访问时会尝试备用复制；仍失败则提供自动选中的文本供手动复制。
 

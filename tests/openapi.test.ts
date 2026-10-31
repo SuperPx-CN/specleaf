@@ -199,7 +199,7 @@ describe('文档模型', () => {
     const selfArray = { A: { type: 'array', items: { $ref: '#/A' } } };
     expect(schemaType(selfArray, { $ref: '#/A' })).toBe('array<递归引用>');
   });
-  it('保留 allOf / oneOf / anyOf 的独立分支及必填、数组、空值和 false Schema', () => {
+  it('合并 allOf，保留 oneOf / anyOf 的分支及必填、数组、空值和 false Schema', () => {
     const schema = {
       type: 'object',
       properties: { id: { type: ['string', 'null'] } },
@@ -212,8 +212,6 @@ describe('文档模型', () => {
     const edges = schemaEdges({}, schema);
     expect(edges.map((edge) => edge.name)).toEqual([
       'id',
-      'allOf · 分支 1',
-      'allOf · 分支 2',
       'oneOf · 分支 1',
       'anyOf · 分支 1',
       '[key] 额外属性',

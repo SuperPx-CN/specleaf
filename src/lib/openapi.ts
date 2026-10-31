@@ -166,23 +166,233 @@ export function matchesOperation(operation: Operation, query: string, method: st
   );
 }
 
-export function schemaType(document: ApiObject, raw: any, seen = new Set<string>()): string {
+const DISPLAY_INPUT = Symbol('display schema input');
+const DISPLAY_SCHEMA = Symbol('display schema');
+
+export interface DisplaySchema {
+  schema: any;
+  forbidden: boolean;
+  references: string[];
+  recursiveReferences: string[];
+  notices: string[];
+  combinationConstraints: any[];
+  alternatives: { keyword: string; branches: any[] }[];
+}
+
+// Carry each branch's own reference path into its children. A shared model used
+// by two independent branches is not a cycle. These wrappers never enter exports.
+function displayInput(raw: any, ancestors: Set<string>): any {
+  return { [DISPLAY_INPUT]: { raw, ancestors } };
+}
+
+const schemaIdentity = (value: any): string =>
+  JSON.stringify(value, (_key, item) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]]))
+      : item,
+  );
+
+/** Resolve and intersect only the current display row; children remain lazy. */
+export function displaySchema(document: ApiObject, raw: any): DisplaySchema {
+  if (raw?.[DISPLAY_SCHEMA]) return raw[DISPLAY_SCHEMA];
+  const parts: { schema: any; ancestors: Set<string> }[] = [];
+  const references = new Set<string>();
+  const recursiveReferences = new Set<string>();
+  const notices = new Set<string>();
+  const flatten = (value: any, ancestors: Set<string>, depth: number) => {
+    if (value?.[DISPLAY_INPUT]) {
+      const input = value[DISPLAY_INPUT];
+      flatten(input.raw, input.ancestors, depth);
+      return;
+    }
+    if (depth >= 32) {
+      notices.add('组合结构已达到展示深度上限，完整规则请查看组合约束。');
+      parts.push({ schema: value, ancestors });
+      return;
+    }
+    if (typeof value === 'boolean') {
+      parts.push({ schema: value, ancestors });
+      return;
+    }
+    const { $ref, allOf, ...local } = object(value);
+    let path = ancestors;
+    if (typeof $ref === 'string') {
+      references.add($ref);
+      if (ancestors.has($ref)) recursiveReferences.add($ref);
+      else {
+        path = new Set(ancestors).add($ref);
+        flatten(resolvePointer(document, $ref), path, depth + 1);
+      }
+    }
+    if (Object.keys(local).length) parts.push({ schema: local, ancestors: path });
+    if (Array.isArray(allOf)) {
+      for (const branch of allOf) flatten(branch, path, depth + 1);
+    }
+  };
+  flatten(raw, new Set(), 0);
+
+  const schema: ApiObject = {};
+  const alternatives: DisplaySchema['alternatives'] = [];
+  const values = new Map<string, any[]>();
+  const children = new Map<string, any[]>();
+  const properties = new Map<string, any[]>();
+  const required = new Set<string>();
+  let hasProperties = false;
+  let hasPrefixItems = false;
+  let forbidden = false;
+  for (const part of parts) {
+    if (part.schema === false) forbidden = true;
+    for (const [key, value] of Object.entries(object(part.schema))) {
+      if (key === 'properties') {
+        hasProperties = true;
+        for (const [name, child] of Object.entries(object(value))) {
+          properties.set(name, [...(properties.get(name) || []), displayInput(child, part.ancestors)]);
+        }
+      } else if (key === 'required') {
+        for (const name of value as string[]) required.add(name);
+      } else if (['items', 'additionalProperties', 'not', 'contains', 'if', 'then', 'else'].includes(key)) {
+        children.set(key, [...(children.get(key) || []), displayInput(value, part.ancestors)]);
+        values.set(key, [...(values.get(key) || []), value]);
+      } else if (key === 'oneOf' || key === 'anyOf') {
+        alternatives.push({
+          keyword: key,
+          branches: (value as any[]).map((branch) => displayInput(branch, part.ancestors)),
+        });
+      } else if (key === 'prefixItems') {
+        hasPrefixItems = true;
+        (value as any[]).forEach((child, index) => {
+          const name = `prefixItems:${index}`;
+          children.set(name, [...(children.get(name) || []), displayInput(child, part.ancestors)]);
+        });
+      } else {
+        values.set(key, [...(values.get(key) || []), value]);
+      }
+    }
+  }
+  const intersect = (inputs: any[]) => inputs.length === 1 ? inputs[0] : { allOf: inputs };
+  if (hasProperties)
+    schema.properties = Object.fromEntries(
+      [...properties].map(([name, inputs]) => [name, intersect(inputs)]),
+    );
+  if (required.size) schema.required = [...required];
+
+  // These keywords evaluate the schema in which they were written. Moving them
+  // across allOf boundaries (especially closed objects) changes their meaning.
+  const scoped = new Set([
+    'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems',
+    'patternProperties', 'dependentSchemas', 'if', 'then', 'else', 'contains', 'minContains', 'maxContains',
+  ]);
+  const annotations = new Set([
+    'title', 'summary', 'description', 'example', 'examples', '$id', '$schema', '$anchor', '$comment',
+  ]);
+  const lower = new Set(['minimum', 'exclusiveMinimum', 'minLength', 'minItems', 'minProperties', 'minContains']);
+  const upper = new Set(['maximum', 'exclusiveMaximum', 'maxLength', 'maxItems', 'maxProperties', 'maxContains']);
+  const additionalScopesSafe = !parts.some((part) => own(object(part.schema), 'patternProperties')) &&
+    parts.filter((part) => own(object(part.schema), 'additionalProperties')).every((part) =>
+      [...properties.keys()].every((name) => own(object(part.schema.properties), name)),
+    );
+  const booleanBounds = parts.length > 1 && ['exclusiveMinimum', 'exclusiveMaximum']
+    .some((key) => (values.get(key) || []).some((value) => typeof value === 'boolean'));
+  const tupleItems = parts.length > 1 && children.has('items') && hasPrefixItems;
+  for (const [key, entries] of values) {
+    const distinct = [...new Map(entries.map((value) => [schemaIdentity(value), value])).values()];
+    if (
+      (scoped.has(key) && parts.length > 1 && !(key === 'additionalProperties' && additionalScopesSafe)) ||
+      (tupleItems && key === 'items') ||
+      (booleanBounds && ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum'].includes(key))
+    ) {
+      notices.add('部分规则依赖原始分支的作用域，需同时满足组合约束中的各个来源。');
+    } else if (key === 'type' || key === 'nullable') {
+      // Type and nullable must be intersected together below.
+    } else if (key === 'description' || key === 'title' || key === 'summary') {
+      schema[key] = distinct.join('\n\n');
+    } else if (key === 'enum') {
+      schema[key] = entries.reduce((left, right) =>
+        left.filter((item: any) => right.some((other: any) => schemaIdentity(item) === schemaIdentity(other))),
+      );
+      if (!schema[key].length) notices.add('枚举约束没有共同取值，禁止任何值。');
+    } else if ((lower.has(key) || upper.has(key)) && entries.every((value) => typeof value === 'number')) {
+      schema[key] = lower.has(key) ? Math.max(...entries) : Math.min(...entries);
+    } else if (['uniqueItems', 'readOnly', 'writeOnly', 'deprecated'].includes(key)) {
+      schema[key] = entries.some(Boolean);
+    } else if (distinct.length === 1) {
+      schema[key] = children.has(key) && !(key === 'additionalProperties' && typeof distinct[0] === 'boolean')
+        ? intersect(children.get(key)!) : distinct[0];
+    } else if (key === 'items') {
+      schema.items = intersect(children.get(key)!);
+    } else if (key === 'additionalProperties') {
+      schema.additionalProperties = entries.includes(false) ? false : intersect(children.get(key)!);
+    } else {
+      notices.add(`${CONSTRAINTS[key] || key}存在多个约束，需同时满足所有来源。`);
+    }
+    if (
+      !annotations.has(key) && !key.startsWith('x-') &&
+      !own(CONSTRAINTS, key) && !['type', 'items', 'not', 'contains', 'if', 'then', 'else'].includes(key)
+    ) {
+      notices.add('其他校验规则保留在组合约束中。');
+    }
+  }
+  let types: string[] | undefined;
+  for (const { schema: part } of parts) {
+    if (!object(part).type) continue;
+    const allowed: string[] = Array.isArray(part.type) ? [...part.type] : [part.type];
+    if (part.nullable === true && !allowed.includes('null')) allowed.push('null');
+    types = types === undefined ? allowed : types.flatMap((type) => {
+      if (allowed.includes(type)) return [type];
+      if (type === 'integer' && allowed.includes('number')) return ['integer'];
+      if (type === 'number' && allowed.includes('integer')) return ['integer'];
+      return [];
+    });
+    types = [...new Set(types)];
+  }
+  if (types) {
+    schema.type = types.length === 1 ? types[0] : types;
+    if (!types.length) notices.add('类型约束没有交集，禁止任何值。');
+    if (types.includes('null') && values.has('nullable')) schema.nullable = true;
+  } else if (values.has('nullable')) schema.nullable = values.get('nullable')!.every(Boolean);
+  const tuples = [...children].filter(([key]) => key.startsWith('prefixItems:'));
+  if (hasPrefixItems) schema.prefixItems = tuples.map(([, inputs]) => intersect(inputs));
+  if (
+    alternatives.filter(({ keyword }) => keyword === 'oneOf').length > 1 ||
+    alternatives.filter(({ keyword }) => keyword === 'anyOf').length > 1
+  ) {
+    notices.add('存在多组备选约束，每组均需独立满足。');
+  }
+  const view: DisplaySchema = {
+    schema,
+    forbidden,
+    references: [...references],
+    recursiveReferences: [...recursiveReferences],
+    notices: [...notices],
+    combinationConstraints: notices.size ? parts.map((part) => part.schema) : [],
+    alternatives,
+  };
+  Object.defineProperty(schema, DISPLAY_SCHEMA, { value: view });
+  return view;
+}
+
+export function schemaType(document: ApiObject, raw: any, seen = new Set<string>(), depth = 0): string {
+  if (depth >= 32) return '已达到展示深度上限';
   if (raw === true) return '任意类型';
   if (raw === false) return '禁止任何值';
-  const node = object(raw);
-  if (node.$ref && seen.has(node.$ref)) return '递归引用';
-  const next = new Set(seen);
-  if (node.$ref) next.add(node.$ref);
-  const schema = resolveSchema(document, node);
-  if (typeof schema === 'boolean') return schema ? '任意类型' : '禁止任何值';
+  const view = displaySchema(document, raw);
+  if (view.references.some((reference) => seen.has(reference))) return '递归引用';
+  const schema = view.schema;
+  if (view.forbidden) return '禁止任何值';
+  if ((Array.isArray(schema.type) && !schema.type.length) || schema.enum?.length === 0)
+    return '禁止任何值';
+  if (!Object.keys(schema).length && view.recursiveReferences.length) return '递归引用';
   let type: string;
-  if (Array.isArray(schema.type)) type = schema.type.join(' | ');
-  else if (schema.type === 'array' || schema.items || schema.prefixItems)
-    type = `array<${schemaType(document, schema.items ?? true, next)}>`;
+  if (Array.isArray(schema.type))
+    type = schema.type.map((type: string) => type === 'array'
+      ? `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>` : type).join(' | ');
+  else if (schema.type === 'array')
+    type = `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>`;
   else if (schema.type) type = schema.type;
-  else if (schema.allOf) type = 'allOf · 全部满足';
-  else if (schema.oneOf) type = 'oneOf · 恰好一个';
-  else if (schema.anyOf) type = 'anyOf · 至少一个';
+  else if (own(schema, 'items') || schema.prefixItems)
+    type = `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>`;
+  else if (view.alternatives.some(({ keyword }) => keyword === 'oneOf')) type = 'oneOf · 恰好一个';
+  else if (view.alternatives.some(({ keyword }) => keyword === 'anyOf')) type = 'anyOf · 至少一个';
   else if (schema.properties || own(schema, 'additionalProperties')) type = 'object';
   else if (own(schema, 'const')) type = schema.const === null ? 'null' : typeof schema.const;
   else type = '任意类型';
@@ -195,7 +405,8 @@ export interface SchemaEdge {
   required: boolean;
 }
 export function schemaEdges(document: ApiObject, raw: any): SchemaEdge[] {
-  const schema = object(resolveSchema(document, raw));
+  const view = displaySchema(document, raw);
+  const schema = object(view.schema);
   const edges: SchemaEdge[] = Object.entries(object(schema.properties)).map(([name, value]) => ({
     name,
     schema: value,
@@ -206,9 +417,14 @@ export function schemaEdges(document: ApiObject, raw: any): SchemaEdge[] {
   (schema.prefixItems || []).forEach((value: any, index: number) =>
     edges.push({ name: `[${index}] 元组元素`, schema: value, required: false }),
   );
-  for (const composition of ['allOf', 'oneOf', 'anyOf']) {
-    (schema[composition] || []).forEach((value: any, index: number) =>
-      edges.push({ name: `${composition} · 分支 ${index + 1}`, schema: value, required: false }),
+  for (const [group, { keyword, branches }] of view.alternatives.entries()) {
+    const multiple = view.alternatives.filter((alternative) => alternative.keyword === keyword).length > 1;
+    branches.forEach((value: any, index: number) =>
+      edges.push({
+        name: `${keyword}${multiple ? ` · 组合 ${group + 1}` : ''} · 分支 ${index + 1}`,
+        schema: value,
+        required: false,
+      }),
     );
   }
   if (schema.additionalProperties && typeof schema.additionalProperties === 'object')
@@ -252,7 +468,7 @@ const CONSTRAINTS: Record<string, string> = {
   unevaluatedProperties: '未评估属性',
 };
 export function schemaConstraints(document: ApiObject, raw: any): [string, any][] {
-  const schema = object(resolveSchema(document, raw));
+  const schema = object(displaySchema(document, raw).schema);
   return Object.entries(CONSTRAINTS)
     .filter(
       ([key]) =>
@@ -264,7 +480,7 @@ export function schemaConstraints(document: ApiObject, raw: any): [string, any][
 
 // Keep common constraints readable; exact schema keywords remain available in details.
 export function schemaConstraintSummary(document: ApiObject, raw: any): [string, any][] {
-  const schema = object(resolveSchema(document, raw));
+  const schema = object(displaySchema(document, raw).schema);
   const summary: [string, any][] = [];
   const compact = new Set([
     'format', 'enum', 'const', 'default', 'minimum', 'maximum',

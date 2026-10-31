@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "优惠券组合模型", "version": "1" },
+  "paths": {
+    "/coupons": {
+      "post": {
+        "summary": "查询优惠券",
+        "parameters": [{ "in": "query", "name": "filter", "schema": { "$ref": "#/components/schemas/CouponResponse" } }],
+        "requestBody": { "content": { "application/json": {
+          "schema": { "$ref": "#/components/schemas/CouponResponse" },
+          "example": { "code": 0, "message": "ok", "data": [], "pagination": { "total": 0 }, "$ref": "literal example" }
+        } } },
+        "responses": { "200": { "description": "成功", "content": { "application/json": {
+          "schema": { "$ref": "#/components/schemas/CouponResponse" },
+          "example": { "code": 0, "message": "ok", "data": [], "pagination": { "total": 0 } }
+        } } } }
+      }
+    }
+  },
+  "components": { "schemas": {
+    "Envelope": {
+      "type": "object", "required": ["code", "message", "data"],
+      "properties": {
+        "code": { "type": "integer", "const": 0 },
+        "message": { "type": "string" },
+        "data": { "description": "业务成功数据" }
+      }
+    },
+    "CouponResponse": { "allOf": [
+      { "$ref": "#/components/schemas/Envelope" },
+      { "allOf": [{
+        "type": "object", "required": ["pagination"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Coupon" } },
+          "pagination": { "$ref": "#/components/schemas/Pagination" }
+        }
+      }] }
+    ] },
+    "Coupon": { "allOf": [
+      { "type": "object", "required": ["id"], "properties": { "id": { "$ref": "#/components/schemas/ID", "minLength": 2, "pattern": "^[A-Z]" } } },
+      { "type": "object", "required": ["name"], "properties": {
+        "name": { "type": "string" }, "discount": { "type": "number", "minimum": 0 },
+        "kind": { "oneOf": [{ "const": "fixed" }, { "const": "percent" }] },
+        "eligibility": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
+        "related": { "$ref": "#/components/schemas/Coupon" }
+      } }
+    ] },
+    "ID": { "type": "string", "description": "优惠券编号", "minLength": 1, "maxLength": 12, "pattern": "[0-9]$" },
+    "Pagination": { "allOf": [
+      { "type": "object", "properties": { "page": { "type": "integer", "minimum": 1 } } },
+      { "type": "object", "required": ["page", "total"], "properties": { "total": { "type": "integer", "minimum": 0 } } }
+    ] }
+  } }
+}

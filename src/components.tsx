@@ -9,7 +9,7 @@ import {
   object,
   own,
   resolveObject,
-  resolveSchema,
+  displaySchema,
   schemaConstraints,
   schemaConstraintSummary,
   schemaEdges,
@@ -183,7 +183,6 @@ export function SchemaTable({ document, schema }: { document: ApiObject; schema:
         name="根节点"
         depth={0}
         required={false}
-        ancestors={new Set()}
         initialOpen
       />
     </div>
@@ -196,7 +195,6 @@ function SchemaRow({
   name,
   required,
   depth,
-  ancestors,
   initialOpen = false,
 }: {
   document: ApiObject;
@@ -204,18 +202,16 @@ function SchemaRow({
   name: string;
   required: boolean;
   depth: number;
-  ancestors: Set<string>;
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
-  const schema = object(resolveSchema(document, raw));
-  const reference = object(raw).$ref as string | undefined;
-  const recursive = reference ? ancestors.has(reference) : false;
-  const edges = recursive || depth >= 32 ? [] : schemaEdges(document, raw);
-  const constraints = schemaConstraints(document, raw);
-  const summary = schemaConstraintSummary(document, raw);
-  const nextAncestors = new Set(ancestors);
-  if (reference) nextAncestors.add(reference);
+  const view = displaySchema(document, raw);
+  const schema = object(view.schema);
+  const reference = view.references[0];
+  const recursive = view.recursiveReferences.length > 0;
+  const edges = depth >= 32 ? [] : schemaEdges(document, view.schema);
+  const constraints = schemaConstraints(document, view.schema);
+  const summary = schemaConstraintSummary(document, view.schema);
   const modelName = reference
     ? decodeURIComponent(reference.split('/').at(-1)!).replace(/~1/g, '/').replace(/~0/g, '~')
     : undefined;
@@ -243,7 +239,7 @@ function SchemaRow({
           <code title={name}>{name}</code>
         </div>
         <div role="cell" className="field-type">
-          <code>{schemaType(document, raw)}</code>
+          <code>{schemaType(document, view.schema)}</code>
           {modelName && <span title={reference}>↗ {modelName}</span>}
         </div>
         <div role="cell">
@@ -252,7 +248,7 @@ function SchemaRow({
         <div role="cell" className="field-description">
           {schema.title && <strong>{schema.title}</strong>}
           <Markdown>{schema.description}</Markdown>
-          {recursive && <span className="reference-note">递归引用 · {modelName}</span>}
+          {recursive && <span className="reference-note">递归引用 · {view.recursiveReferences.join('、')}</span>}
           {depth >= 32 && <span className="reference-note">已达到展示深度上限</span>}
           {summary.length > 0 && (
             <div className="constraint-summary">
@@ -274,7 +270,21 @@ function SchemaRow({
               </div>
             </details>
           )}
-          {!schema.title && !schema.description && !constraints.length && !recursive && (
+          {view.combinationConstraints.length > 0 && (
+            <details className="constraint-details">
+              <summary>组合约束</summary>
+              {view.notices.map((notice) => <p key={notice}>{notice}</p>)}
+              <div className="constraints">
+                {view.combinationConstraints.map((source, index) => (
+                  <div key={index}>
+                    <span>来源 {index + 1}：</span>
+                    <code>{JSON.stringify(source, null, 2)}</code>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          {!schema.title && !schema.description && !constraints.length && !recursive && !view.notices.length && (
             <span className="muted">—</span>
           )}
         </div>
@@ -286,7 +296,6 @@ function SchemaRow({
             {...edge}
             document={document}
             depth={depth + 1}
-            ancestors={nextAncestors}
           />
         ))}
     </>
@@ -429,14 +438,14 @@ export function ParameterTable({
             name={parameter.name}
             required={parameter.in === 'path' || !!parameter.required}
             depth={0}
-            ancestors={new Set()}
             schema={{
-              ...resolveObject(
-                document,
+              allOf: [
                 parameter.schema ?? Object.values(object(parameter.content))[0]?.schema,
-              ),
-              ...(parameter.description ? { description: parameter.description } : {}),
-              ...(parameter.deprecated ? { deprecated: true } : {}),
+                {
+                  ...(parameter.description ? { description: parameter.description } : {}),
+                  ...(parameter.deprecated ? { deprecated: true } : {}),
+                },
+              ],
             }}
           />
         ))}
