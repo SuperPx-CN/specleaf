@@ -66,7 +66,7 @@ export function openApiPlugin(): Plugin {
     },
     configureServer(value) {
       server = value;
-      server.watcher.add([entry, dirname(entry)]);
+      server.watcher.add(directoryMode ? [entry] : [entry, dirname(entry)]);
       let timer: ReturnType<typeof setTimeout>;
       // Serialize reloads and rescan after changes during parsing, so old reads cannot win a race.
       let running = false;

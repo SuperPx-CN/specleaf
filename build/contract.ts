@@ -137,7 +137,7 @@ export async function loadContract(entry: string): Promise<Contract> {
 export async function loadDocumentation(input: string): Promise<Documentation> {
   const entry = contractEntry(process.cwd(), input);
   const files = new Set<string>();
-  const directories = new Set<string>([dirname(entry)]);
+  const directories = new Set<string>();
   try {
     if (!(await stat(entry)).isDirectory()) {
       const contract = await loadContract(entry);
@@ -185,6 +185,8 @@ export async function loadDocumentation(input: string): Promise<Documentation> {
     return { document: { kind: 'specleaf/modules', title: basename(entry), modules }, files: [...files], entry, directories: [...directories] };
   } catch (cause) {
     if (cause instanceof DocumentationLoadError) throw cause;
+    // A missing input still needs a parent watcher so creation can recover it.
+    if (!directories.size) directories.add(dirname(entry));
     throw new DocumentationLoadError(`OpenAPI 文档加载失败：${entry}\n${(cause as Error).message}`, [...files, entry], [...directories], { cause });
   }
 }

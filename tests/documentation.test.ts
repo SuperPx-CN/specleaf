@@ -106,6 +106,15 @@ describe('模块文档加载', () => {
     await expect(loadDocumentation(directory)).rejects.toThrow(/模块「bad」解析失败.*仅支持 OpenAPI/s);
   });
 
+  it('目录监听不无条件包含父目录，空目录错误也仅监听模块树', async () => {
+    const directory = await temporary();
+    const input = join(directory, 'apis');
+    await mkdir(input);
+    await expect(loadDocumentation(input)).rejects.toMatchObject({ directories: [input] });
+    await writeFile(join(input, 'openapi.json'), JSON.stringify(base));
+    expect((await loadDocumentation(input)).directories).toEqual([input]);
+  });
+
   it('单文件保留原始契约形状及 loadContract 接口', async () => {
     const input = resolve('examples/minimal.json');
     const result = await loadDocumentation(input);

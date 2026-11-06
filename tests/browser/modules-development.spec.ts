@@ -6,6 +6,47 @@ import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { openApiPlugin } from '../../build/openapi-plugin';
 
+test('模块目录不监听无关兄弟目录，兄弟 HTML 变化不会触发页面刷新', async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), 'specleaf-watch-scope-'));
+  const input = join(directory, 'apis');
+  const sibling = join(directory, 'unrelated');
+  const originalEntry = process.env.OPENAPI_ENTRY;
+  const contract = (title: string) => JSON.stringify({
+    openapi: '3.1.0', info: { title, version: '1' }, paths: {},
+  });
+  await mkdir(input);
+  await mkdir(sibling);
+  await writeFile(join(input, 'openapi.json'), contract('监听范围'));
+  await writeFile(join(sibling, 'index.html'), 'before');
+  process.env.OPENAPI_ENTRY = input;
+  const server = await createServer({
+    configFile: false, root: process.cwd(), base: './', plugins: [react(), openApiPlugin()],
+    server: { host: '127.0.0.1', port: 0 },
+  });
+  try {
+    await server.listen();
+    const address = server.httpServer!.address() as { port: number };
+    await page.goto(`http://127.0.0.1:${address.port}/`);
+    await expect(page.locator('.overview-hero h1')).toHaveText('监听范围.');
+    expect(server.watcher.getWatched()[sibling]).toBeUndefined();
+    let navigations = 0;
+    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) navigations++; });
+    await writeFile(join(sibling, 'index.html'), 'after');
+    await writeFile(join(sibling, 'new.html'), 'new');
+    // Cover awaitWriteFinish and the reload debounce before checking absence of a reload.
+    await page.waitForTimeout(700);
+    expect(navigations).toBe(0);
+    await writeFile(join(input, 'openapi.json'), contract('仍可更新'));
+    await expect(page.locator('.overview-hero h1')).toHaveText('仍可更新.');
+    expect(navigations).toBeGreaterThan(0);
+  } finally {
+    await server.close();
+    if (originalEntry === undefined) delete process.env.OPENAPI_ENTRY;
+    else process.env.OPENAPI_ENTRY = originalEntry;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('初始空模块目录显示错误浮层，新增入口后自动恢复', async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), 'specleaf-empty-dev-'));
   const originalEntry = process.env.OPENAPI_ENTRY;
