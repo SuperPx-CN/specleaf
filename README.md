@@ -33,6 +33,40 @@ npm install -g specleaf@latest
 npm install -D specleaf@latest
 ```
 
+## 安装 Agent skill
+
+SpecLeaf 随 npm 包提供同一份 `specleaf` skill，可安装给 Codex、Claude Code 和 OpenCode，让 Agent 按自然语言请求选择本地契约、生成或更新离线 HTML，并定位生成失败。
+
+```bash
+# 安装到当前目录，支持三个工具；也可用 npx specleaf install skill
+specleaf install skill
+
+# 只安装给指定工具；--agent 可重复，也可用逗号分隔
+specleaf install skill --agent codex
+specleaf install skill --agent claude,opencode
+
+# 安装到用户目录，供所有项目使用
+specleaf install skill --global
+
+# 更新已有且内容不同的 skill 文件，保留其他文件
+specleaf install skill --force
+specleaf install skill --help
+```
+
+默认安装范围为**调用目录**，可在目标项目根目录执行；不会自动切换到 Git 根目录。`--global` 使用当前用户的主目录：
+
+| 工具 | 项目安装 | 用户安装（`--global`） |
+| --- | --- | --- |
+| Codex | `.agents/skills/specleaf/` | `~/.agents/skills/specleaf/` |
+| Claude Code | `.claude/skills/specleaf/` | `~/.claude/skills/specleaf/` |
+| OpenCode | `.agents/skills/specleaf/` | `~/.agents/skills/specleaf/` |
+
+OpenCode 使用其支持的 `.agents/skills` 兼容目录，与 Codex 共用一份安装。目录约定见 [Codex 官方文档](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)、[Claude Code 官方文档](https://code.claude.com/docs/en/skills#choose-where-skills-load)、[OpenCode 官方文档](https://opencode.ai/docs/skills/#place-files)。
+
+安装直接复制包内 skill，无需联网，也不要求三个 Agent 工具已安装。重复安装时跳过内容相同的文件；已有文件内容不同时，先报告冲突且不写入任何目标，使用 `--force` 可更新随包提供的文件。额外文件会保留；安装路径中的符号链接及非预期文件类型会被拒绝。`specleaf.json` 记录安装时的 CLI 版本，供 Agent 在需要临时调用 npm 包时固定版本。通过 npx 首次获取 SpecLeaf 仍可能需要联网。
+
+安装后可在 Agent 中请求“把 docs/apis 下的接口契约生成为离线 HTML”。Codex 可通过 `$specleaf` 显式调用，Claude Code 可通过 `/specleaf` 调用；未发现新增 skill 时重新打开会话。skill 聚焦已有契约的生成、更新和错误诊断，生成时源契约只读。
+
 ## 生成单个 HTML
 
 以下命令用于已经安装的 CLI：
@@ -150,7 +184,7 @@ npx specleaf --version
 
 把上面的 `../specleaf` 替换为实际源码目录。`npm run test:package` 自动在临时独立目录执行真实 `npm pack`、生产依赖安装、npm scripts、npm exec、npx 临时安装和临时全局安装，再验收文件保护、错误退出与特殊字符。验收后自动删除临时目录，不修改系统全局安装。
 
-`build:package` 只生成 `lib/cli.js` 和 `lib/assets/`；`files` 白名单仅分发这些产物、README、LICENSE 和 npm 必需的包元信息。公开接口为 `specleaf` CLI。
+`build:package` 只生成 `lib/cli.js` 和 `lib/assets/`；`files` 白名单分发这些产物、`skills/specleaf/`、README、LICENSE 和 npm 必需的包元信息。公开接口为 `specleaf` CLI，包含 HTML 生成及 `install skill` 子命令。
 
 ## 阅读功能
 
@@ -233,12 +267,14 @@ build/serialize.ts       HTML JSON 数据块的安全序列化
 build/package.ts         预编译 ESM CLI、通用 IIFE、CSS 和图标
 build/generate.ts        读取包内资源、HTML 内嵌与原子写入
 build/cli.ts             specleaf 命令、帮助和版本
+build/skills.ts          skill 安装、目标目录选择及已有文件保护
 build/build.ts            默认生产构建
 src/lib/openapi.ts        引用、接口、Schema、示例和 cURL 处理
 src/lib/documentation.ts  模块集合类型、标题与模块路由
 src/components.tsx        字段树、参数表、Markdown、示例与复制
 src/App.tsx               目录、概览与接口详情
 examples/                 独立 YAML、JSON 和跨文件模型示例
+skills/specleaf/           随 npm 包分发的跨工具 skill
 tests/                    单元、命令及浏览器测试
 ```
 

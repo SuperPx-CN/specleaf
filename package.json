@@ -18,6 +18,7 @@
   "files": [
     "lib/cli.js",
     "lib/assets/",
+    "skills/specleaf/",
     "README.md",
     "LICENSE"
   ],

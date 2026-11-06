@@ -42,7 +42,7 @@ try {
   process.stdout.write('打包并检查文件白名单…\n');
   const { stdout } = await npm(root, 'pack', '--json', '--pack-destination', directory);
   const packed = JSON.parse(stdout)[0];
-  const expected = ['LICENSE', 'README.md', 'lib/assets/favicon.svg', 'lib/assets/ui.css', 'lib/assets/ui.js', 'lib/cli.js', 'package.json'];
+  const expected = ['LICENSE', 'README.md', 'lib/assets/favicon.svg', 'lib/assets/ui.css', 'lib/assets/ui.js', 'lib/cli.js', 'package.json', 'skills/specleaf/SKILL.md', 'skills/specleaf/agents/openai.yaml'];
   assert.deepEqual(packed.files.map((file) => file.path).sort(), expected.sort());
   // Windows records readable file bits; executable commands use npm's .cmd shim.
   const commandMode = process.platform === 'win32' ? 0o444 : 0o111;
@@ -63,7 +63,7 @@ try {
   await npm(consumer, 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', tarball);
   const installed = join(consumer, 'node_modules/specleaf');
   assert.equal((await lstat(installed)).isSymbolicLink(), false);
-  assert.deepEqual((await readdir(installed)).sort(), ['LICENSE', 'README.md', 'lib', 'package.json']);
+  assert.deepEqual((await readdir(installed)).sort(), ['LICENSE', 'README.md', 'lib', 'package.json', 'skills']);
   for (const dependency of ['vite', 'react', 'react-dom', 'typescript', 'lucide-react', 'vitest', '@vitejs/plugin-react'])
     await assert.rejects(access(join(consumer, 'node_modules', dependency)));
   const installedManifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
@@ -74,6 +74,25 @@ try {
     const shim = await readFile(join(consumer, 'node_modules/.bin/specleaf.cmd'), 'utf8');
     assert.match(shim, /specleaf[\\/]lib[\\/]cli\.js/);
   }
+
+  process.stdout.write('验收包内 skill 安装、重复安装和已有文件保护…\n');
+  await cli(consumer, executable, 'install', 'skill');
+  const installedSkill = join(consumer, '.agents/skills/specleaf');
+  const claudeSkill = join(consumer, '.claude/skills/specleaf');
+  for (const target of [installedSkill, claudeSkill]) {
+    assert.equal(await readFile(join(target, 'SKILL.md'), 'utf8'), await readFile(join(installed, 'skills/specleaf/SKILL.md'), 'utf8'));
+    assert.deepEqual(JSON.parse(await readFile(join(target, 'specleaf.json'), 'utf8')), { version: manifest.version });
+    await access(join(target, 'agents/openai.yaml'));
+  }
+  const repeated = await cli(consumer, executable, 'install', 'skill');
+  assert.match(repeated.stdout, /跳过/);
+  await writeFile(join(installedSkill, 'SKILL.md'), '用户修改');
+  await writeFile(join(installedSkill, 'notes.md'), '保留备注');
+  await fails(consumer, executable, ['install', 'skill'], /--force/);
+  assert.equal(await readFile(join(installedSkill, 'SKILL.md'), 'utf8'), '用户修改');
+  await cli(consumer, executable, 'install', 'skill', '--force');
+  assert.equal(await readFile(join(installedSkill, 'notes.md'), 'utf8'), '保留备注');
+  assert.match(await readFile(join(installedSkill, 'SKILL.md'), 'utf8'), /name: specleaf/);
 
   process.stdout.write('验收 npm scripts、npm exec、npx、临时全局安装…\n');
   const nested = join(consumer, 'nested');
@@ -125,6 +144,9 @@ try {
   await writeFile(join(transient, 'api.json'), JSON.stringify(base));
   await exec(process.execPath, [npxCli, '--yes', '--offline', '--ignore-scripts', `--package=${tarball}`, 'specleaf', 'api.json'], { cwd: transient, env, timeout: 180000 });
   assert.deepEqual(await readDocument(join(transient, 'openapi.html')), base);
+  await exec(process.execPath, [npxCli, '--yes', '--offline', '--ignore-scripts', `--package=${tarball}`, 'specleaf', 'install', 'skill', '--agent', 'opencode'], { cwd: transient, env, timeout: 180000 });
+  assert.match(await readFile(join(transient, '.agents/skills/specleaf/SKILL.md'), 'utf8'), /name: specleaf/);
+  await assert.rejects(access(join(transient, '.claude')));
 
   const prefix = join(directory, 'global');
   await npm(consumer, 'install', '--global', '--prefix', prefix, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', tarball);
