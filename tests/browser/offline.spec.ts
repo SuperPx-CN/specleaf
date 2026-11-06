@@ -63,7 +63,7 @@ test.describe('独立离线 HTML', () => {
     await page.reload();
     await expect(page.locator('.title-row h1')).toHaveText('创建资源');
     await expect(page.locator('.api-status-badge')).toHaveText('开发中');
-    const statusPolicy = page.locator('.policy-card').filter({ has: page.locator('summary code', { hasText: 'x-api-status' }) });
+    const statusPolicy = page.locator('#policies summary', { hasText: 'x-api-status' });
     await expect(statusPolicy).toHaveCount(0);
     await page.locator('#request').getByRole('button', { name: '展开 children', exact: true }).click();
     await page.locator('#request').getByRole('button', { name: '展开 [] 数组元素', exact: true }).click();

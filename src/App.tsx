@@ -837,78 +837,10 @@ function Responses({ document, operation }: { document: ApiObject; operation: Op
   );
 }
 
-const POLICY_LABELS: Record<string, string> = {
-  'x-permissions': '访问权限',
-  'x-rate-limit': '请求限流',
-  'x-idempotency': '幂等策略',
-  'x-audit': '审计要求',
-  'x-sensitive-fields': '敏感字段',
-  'x-design-status': '设计状态',
-};
-const POLICY_FIELDS: Record<string, string> = {
-  permission: '权限标识',
-  roles: '允许角色',
-  scope: '作用范围',
-  window_seconds: '窗口秒数',
-  principal_limit: '主体请求上限',
-  ip_limit: 'IP 请求上限',
-  key: '限流键',
-  failure_policy: '失败策略',
-  shared_across_sessions: '跨会话共享',
-  required: '是否必需',
-  retention: '保留策略',
-  conflict: '冲突处理',
-  recovery: '恢复方式',
-  reason_required: '是否需要原因',
-  events: '审计事件',
-  secrets: '凭据处理',
-  request_or_response: '涉及字段',
-  logging: '日志规则',
-};
-function policyValue(value: any): string {
-  return value === true
-    ? '是'
-    : value === false
-      ? '否'
-      : value === null
-        ? '空值'
-        : Array.isArray(value) && value.length === 0
-          ? '无'
-          : typeof value === 'object'
-            ? JSON.stringify(value, null, 2)
-            : String(value);
-}
 function Policies({ definition }: { definition: ApiObject }) {
   const extensions = Object.entries(definition).filter(([key]) => key.startsWith('x-') && key !== 'x-api-status');
   if (!extensions.length) return <div className="empty-note">契约未定义扩展操作策略</div>;
-  return (
-    <div className="policy-grid">
-      {extensions.map(([key, value]) => (
-        <details className="policy-card" key={key} open={key !== 'x-design-status'}>
-          <summary>
-            <span>{POLICY_LABELS[key] || '扩展说明'}</span>
-            <code>{key}</code>
-            <ChevronDown size={14} />
-          </summary>
-          {value !== null && typeof value === 'object' && !Array.isArray(value) ? (
-            <dl>
-              {Object.entries(value).map(([field, item]) => (
-                <div key={field}>
-                  <dt>
-                    {POLICY_FIELDS[field] || field}
-                    <code>{field}</code>
-                  </dt>
-                  <dd>{policyValue(item)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p>{policyValue(value)}</p>
-          )}
-        </details>
-      ))}
-    </div>
-  );
+  return <>{extensions.map(([key, value]) => <RawDetails key={key} title={key} value={value} />)}</>;
 }
 
 function OperationDetail({ document, operation, moduleId }: { document: ApiObject; operation: Operation; moduleId?: string }) {

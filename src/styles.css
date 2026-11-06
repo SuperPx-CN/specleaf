@@ -1824,83 +1824,6 @@ summary {
 .response-headers .schema-table {
   margin-top: 5px;
 }
-.policy-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
-}
-.policy-card {
-  border: 1px solid #ece2f3;
-  border-radius: 7px;
-  overflow: hidden;
-}
-.policy-card > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 13px 14px;
-  background: #fcf9ff;
-  list-style: none;
-  color: var(--text);
-  font-size: 13px;
-}
-.policy-card > summary::-webkit-details-marker {
-  display: none;
-}
-.policy-card > summary > code {
-  font-size: 10px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.policy-card > summary > svg {
-  margin-left: auto;
-  color: var(--muted);
-}
-.policy-card:not([open]) > summary > svg {
-  transform: rotate(-90deg);
-}
-.policy-card dl {
-  margin: 0;
-  padding: 1px 14px 8px;
-}
-.policy-card dl > div {
-  display: grid;
-  grid-template-columns: 1fr 1.05fr;
-  gap: 12px;
-  border-top: 1px solid #f3ecf8;
-  padding: 11px 0;
-  align-items: start;
-}
-.policy-card dl > div:first-child {
-  border: 0;
-}
-.policy-card dt {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-.policy-card dt > code {
-  display: block;
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 2px;
-  overflow-wrap: anywhere;
-}
-.policy-card dd {
-  margin: 0;
-  font-size: 11px;
-  color: var(--text);
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.policy-card > p {
-  padding: 13px 14px;
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
 .end-note {
   display: flex;
   gap: 7px;
@@ -2063,9 +1986,6 @@ summary {
   .hero-actions > span {
     display: none;
   }
-  .policy-grid {
-    grid-template-columns: 1fr;
-  }
   .auth-option {
     flex-wrap: wrap;
   }
@@ -2176,9 +2096,6 @@ summary {
   .schema-head,
   .schema-row {
     grid-template-columns: minmax(115px, 1fr) minmax(90px, 0.8fr) 44px minmax(150px, 1.6fr);
-  }
-  .policy-grid {
-    grid-template-columns: 1fr 1fr;
   }
   .auth-option {
     flex-wrap: nowrap;
@@ -2407,24 +2324,6 @@ summary {
   }
   .source-note {
     display: none;
-  }
-  .policy-grid {
-    grid-template-columns: 1fr;
-  }
-  .policy-card > summary {
-    padding: 13px;
-  }
-  .policy-card dl {
-    padding: 0 13px 7px;
-  }
-  .policy-card dt {
-    font-size: 12px;
-  }
-  .policy-card dt > code {
-    font-size: 11px;
-  }
-  .policy-card dd {
-    font-size: 12px;
   }
   .end-note {
     font-size: 11px;
