@@ -23,6 +23,16 @@ npx specleaf ./openapi.yaml
 
 安装包已包含编译后的 CLI 和界面资源。用户安装与运行均不需要 Vite、React、TypeScript 或前端构建步骤，支持 `--ignore-scripts` 安装。
 
+已安装的用户可按安装方式升级到最新版本：
+
+```bash
+# 全局升级
+npm install -g specleaf@latest
+
+# 项目内升级（在项目目录执行）
+npm install -D specleaf@latest
+```
+
 ## 生成单个 HTML
 
 以下命令用于已经安装的 CLI：
