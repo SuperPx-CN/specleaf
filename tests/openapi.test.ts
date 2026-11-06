@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import grouping from './fixtures/grouping.json';
-import { contractEntry, loadContract } from '../build/contract';
+import { contractEntry, DocumentationLoadError, loadContract } from '../build/contract';
 import {
   API_STATUS_LABELS,
   collectOperations,
@@ -72,6 +72,28 @@ describe('本地契约合并', () => {
     });
     await expect(loadContract(entry)).rejects.toThrow(/missing\.yaml/);
     await expect(loadContract(entry)).rejects.toThrow(/#\/paths\/~1test\/\$ref/);
+  });
+  it('失败上下文与缺失文件监听都跳过字面数据，同名 Schema 属性仍参与引用收集', async () => {
+    const literal = { $ref: './literal-only.json#/Data' };
+    const entry = await fixture({
+      'openapi.json': {
+        ...base,
+        'x-data': literal,
+        components: {
+          schemas: { Sample: {
+            default: literal, example: literal, examples: [literal], enum: [literal], const: literal,
+            properties: { example: { $ref: './missing.json#/String' } },
+          } },
+          examples: { sample: { value: literal } },
+        },
+      },
+    });
+    const error = await loadContract(entry).catch((error) => error);
+    expect(error).toBeInstanceOf(DocumentationLoadError);
+    expect(error.message).toContain('#/components/schemas/Sample/properties/example/$ref');
+    expect(error.message).not.toContain('literal-only');
+    expect(error.files).toContain(resolve(entry, '../missing.json'));
+    expect(error.files.some((file: string) => file.includes('literal-only'))).toBe(false);
   });
   it('无效指针的错误包含引用位置和目标字段', async () => {
     const entry = await fixture({

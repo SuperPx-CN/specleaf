@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { atomicWriteFile } from './files.ts';
 
 export const skillAgents = ['codex', 'claude', 'opencode'] as const;
 export type SkillAgent = (typeof skillAgents)[number];
@@ -78,14 +78,16 @@ async function readSkillFiles(directory: string, prefix = ''): Promise<Map<strin
   return files;
 }
 
-async function checkDirectories(base: string, relative: string) {
+async function checkDirectories(base: string, relative: string, checked: Set<string>) {
   let path = base;
   for (const part of relative.split(sep)) {
     if (!part || part === '.') continue;
     path = join(path, part);
+    if (checked.has(path)) continue;
     const existing = await statIfPresent(path);
-    if (existing && (!existing.isDirectory() || existing.isSymbolicLink()))
+    if (existing && !existing.isDirectory())
       throw new Error(`skill 安装目录不能是符号链接或非目录：${path}`);
+    checked.add(path);
   }
 }
 
@@ -107,18 +109,19 @@ export async function installSkill(
   }
 
   // Check every destination before writing any files, including shared installations.
+  const checkedDirectories = new Set<string>();
   const plans: { result: SkillInstallation; changes: { path: string; content: Buffer }[] }[] = [];
   for (const [relative, agents] of targets) {
-    await checkDirectories(base, relative);
+    await checkDirectories(base, relative, checkedDirectories);
     const directory = join(base, relative);
     const changes = [];
     let hasFiles = false;
     for (const [name, content] of files) {
-      await checkDirectories(base, join(relative, dirname(name)));
+      await checkDirectories(base, join(relative, dirname(name)), checkedDirectories);
       const path = join(directory, name);
       const existing = await statIfPresent(path);
       if (existing) {
-        if (!existing.isFile() || existing.isSymbolicLink())
+        if (!existing.isFile())
           throw new Error(`skill 文件不能是符号链接或非普通文件：${path}`);
         hasFiles = true;
         if ((await readFile(path)).equals(content)) continue;
@@ -135,14 +138,7 @@ export async function installSkill(
 
   for (const { changes } of plans) {
     for (const { path, content } of changes) {
-      await mkdir(dirname(path), { recursive: true });
-      const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
-      try {
-        await writeFile(temporary, content, { flag: 'wx' });
-        await rename(temporary, path);
-      } finally {
-        await rm(temporary, { force: true });
-      }
+      await atomicWriteFile(path, content);
     }
   }
   return plans.map(({ result }) => result);

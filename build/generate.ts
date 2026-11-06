@@ -1,18 +1,13 @@
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadDocumentation, type Documentation } from './contract.ts';
 import { documentationTitle, isModuleCollection } from '../src/lib/documentation.ts';
 import { serializeContract } from './serialize.ts';
+import { escapeHtml } from './html.ts';
+import { atomicWriteFile } from './files.ts';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-
-export function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
-  );
-}
 
 export async function renderHtml(contract: Pick<Documentation, 'document'>): Promise<string> {
   const assets = new URL('../lib/assets/', import.meta.url);
@@ -69,20 +64,13 @@ async function protectSources(output: string, sources: string[]) {
 export async function generate(input: string, destination: string): Promise<string> {
   const contract = await loadDocumentation(input);
   const output = resolve(destination);
-  let temporary: string | undefined;
   try {
     await protectSources(output, contract.files);
     const html = await renderHtml(contract);
-    await mkdir(dirname(output), { recursive: true });
-    temporary = join(dirname(output), `.${basename(output)}.${randomUUID()}.tmp`);
-    await writeFile(temporary, html, { encoding: 'utf8', flag: 'wx' });
     // Recheck after rendering and replace only once the full document has been written.
-    await protectSources(output, contract.files);
-    await rename(temporary, output);
+    await atomicWriteFile(output, html, () => protectSources(output, contract.files));
     return output;
   } catch (cause) {
     throw new Error(`HTML 生成或写入失败：${output}\n${(cause as Error).message}`, { cause });
-  } finally {
-    if (temporary) await rm(temporary, { force: true });
   }
 }

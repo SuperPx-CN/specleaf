@@ -68,9 +68,9 @@ export function contractEntry(root: string, configured = process.env.OPENAPI_ENT
   return isAbsolute(entry) ? entry : resolve(root, entry);
 }
 
-function references(value: any, pointer = '#', result: string[] = []): string[] {
-  if (!value || typeof value !== 'object') return result;
-  if (typeof value.$ref === 'string') result.push(`${pointer}/$ref → ${value.$ref}`);
+function references(value: any, pointer = '#', result: { pointer: string; target: string }[] = []) {
+  if (!value || typeof value !== 'object' || literalPayload(pointer, value)) return result;
+  if (typeof value.$ref === 'string') result.push({ pointer: `${pointer}/$ref`, target: value.$ref });
   for (const [key, child] of Object.entries(value))
     references(child, `${pointer}/${pointerEscape(key)}`, result);
   return result;
@@ -101,30 +101,24 @@ export async function loadContract(entry: string): Promise<Contract> {
   } catch (cause) {
     const error = cause as Error & { source?: string; path?: string[]; targetToken?: string };
     const sources = parser.$refs.values();
-    const locations = Object.entries(sources).flatMap(([file, value]) =>
-      references(value).map((ref) => `${file} ${ref}`),
-    );
+    const locations: string[] = [];
+    const files = new Set([entry, ...parser.$refs.paths()]);
+    // One traversal supplies error context and unresolved local targets to watch.
+    for (const [file, value] of Object.entries(sources)) {
+      for (const reference of references(value)) {
+        locations.push(`${file} ${reference.pointer} → ${reference.target}`);
+        const target = reference.target.split('#')[0];
+        if (target && !/^[a-z][a-z\d+.-]*:/i.test(target)) {
+          try { files.add(resolve(dirname(file), decodeURIComponent(target))); } catch { /* Invalid path. */ }
+        }
+      }
+    }
     const relevant = locations.filter(
       (location) =>
         (error.targetToken && location.includes(error.targetToken)) ||
         (error.source && location.includes(error.source.split('/').at(-1)!)),
     );
     const context = (relevant.length ? relevant : locations).slice(0, 8);
-    const files = new Set([entry, ...parser.$refs.paths()]);
-    // Keep unresolved local targets watchable too, including references outside the entry directory.
-    for (const [file, value] of Object.entries(sources)) {
-      const visit = (node: any, pointer = '#') => {
-        if (!node || typeof node !== 'object' || literalPayload(pointer, node)) return;
-        if (typeof node.$ref === 'string') {
-          const target = node.$ref.split('#')[0];
-          if (target && !/^[a-z][a-z\d+.-]*:/i.test(target)) {
-            try { files.add(resolve(dirname(file), decodeURIComponent(target))); } catch { /* Invalid path. */ }
-          }
-        }
-        for (const [key, child] of Object.entries(node)) visit(child, `${pointer}/${pointerEscape(key)}`);
-      };
-      visit(value);
-    }
     throw new DocumentationLoadError(
       [
         `OpenAPI 契约解析失败：${entry}`,

@@ -1,16 +1,16 @@
 import { stat } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
-import { contractEntry, DocumentationLoadError, ignoredDirectories, loadDocumentation, moduleEntryNames, type Contract, type Documentation } from './contract.ts';
+import { contractEntry, DocumentationLoadError, ignoredDirectories, loadDocumentation, moduleEntryNames, type Documentation } from './contract.ts';
 import { documentationTitle } from '../src/lib/documentation.ts';
 import { serializeContract } from './serialize.ts';
+import { escapeHtml } from './html.ts';
 
 const virtualId = 'virtual:openapi';
 const resolvedId = '\0' + virtualId;
-export function openApiPlugin(provided?: Contract | Documentation): Plugin {
-  let root: string;
+export function openApiPlugin(): Plugin {
   let entry: string;
-  let contract: Contract | Documentation | undefined;
+  let contract: Documentation | undefined;
   let watched = new Set<string>();
   let server: ViteDevServer | undefined;
   let directoryMode = false;
@@ -21,10 +21,10 @@ export function openApiPlugin(provided?: Contract | Documentation): Plugin {
   }
   async function load() {
     try {
-      const result = provided ?? await loadDocumentation(entry);
+      const result = await loadDocumentation(entry);
       contract = result;
       watched = new Set();
-      watch(result.files, 'directories' in result ? result.directories : result.files.map(dirname));
+      watch(result.files, result.directories);
       return result;
     } catch (error) {
       if (error instanceof DocumentationLoadError) watch(error.files, error.directories);
@@ -50,8 +50,7 @@ export function openApiPlugin(provided?: Contract | Documentation): Plugin {
       return { server: { watch: { awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 10 } } } };
     },
     async configResolved(config) {
-      root = config.root;
-      entry = provided?.entry ?? contractEntry(root);
+      entry = contractEntry(config.root);
       directoryMode = await stat(entry).then((value) => value.isDirectory(), () => false);
     },
     async buildStart() {
@@ -119,11 +118,8 @@ export function openApiPlugin(provided?: Contract | Documentation): Plugin {
     },
     transformIndexHtml(html) {
       if (!contract) return html;
-      const escape = (value: string) => value.replace(/[&<>"']/g, (character) =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
-      );
       return html.replace('<title>OpenAPI 文档</title>', () =>
-        `<title>${escape(documentationTitle(contract!.document))} · API 文档</title>`,
+        `<title>${escapeHtml(documentationTitle(contract!.document))} · API 文档</title>`,
       );
     },
     async watchChange(id) {
