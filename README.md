@@ -177,7 +177,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.2.0.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.2.1.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```
