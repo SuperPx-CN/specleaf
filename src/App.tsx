@@ -17,12 +17,10 @@ import {
   Hash,
   KeyRound,
   Layers3,
-  Link2,
   ListFilter,
   Menu,
   Search,
   ShieldCheck,
-  Sparkles,
   X,
 } from 'lucide-react';
 import documentation from 'virtual:openapi';
@@ -52,7 +50,13 @@ import {
   type Operation,
 } from './lib/openapi';
 
-const initialExpanded = () => new Set<string>([]);
+interface NavigationGroup {
+  moduleId?: string;
+  document: ApiObject;
+  operations: Operation[];
+  tags: string[];
+}
+const groupKey = (moduleId: string | undefined, tag: string) => JSON.stringify([moduleId, tag]);
 const icons = [KeyRound, ShieldCheck, Database, Layers3, Globe2, Code2, FileText, Hash];
 const overviewOutline = [
   ['introduction', '文档概览'], ['quickstart', '开始使用'],
@@ -72,33 +76,40 @@ export default function App() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
   const collection = isModuleCollection(documentation) ? documentation : undefined;
+  const navigation = useMemo<NavigationGroup[]>(() => {
+    const sources = isModuleCollection(documentation) ? documentation.modules
+      : [{ id: undefined, document: documentation as ApiObject }];
+    return sources.map(({ id, document }) => {
+      const operations = collectOperations(document);
+      return { moduleId: id, document, operations, tags: collectTags(document, operations) };
+    });
+  }, []);
   const route = documentationRoute(hash, collection?.modules);
-  const current = collection?.modules.find((module) => module.id === route.moduleId);
-  const document: ApiObject = collection ? current?.document ?? { info: { title: collection.title }, paths: {} }
-    : documentation as ApiObject;
+  const current = navigation.find((group) => group.moduleId === route.moduleId);
+  const document = current?.document ?? { info: { title: collection?.title }, paths: {} };
   return <DocumentationView
     document={document}
     title={collection?.title ?? document.info.title}
     modules={collection?.modules}
-    moduleId={current?.id}
+    moduleId={current?.moduleId}
+    navigation={navigation}
     route={route}
   />;
 }
 
-function DocumentationView({ document, title, modules, moduleId, route }: {
+function DocumentationView({ document, title, modules, moduleId, navigation, route }: {
   document: ApiObject;
   title: string;
   modules?: DocumentationModule[];
   moduleId?: string;
+  navigation: NavigationGroup[];
   route: DocumentationRoute;
 }) {
-  const operations = useMemo(() => collectOperations(document), [document]);
-  const tags = useMemo(() => collectTags(document, operations), [document, operations]);
+  const { operations = [], tags = [] } = navigation.find((group) => group.moduleId === moduleId) ?? {};
   const overview = overviewHash(moduleId ?? modules?.[0]?.id);
   const [query, setQuery] = useState('');
   const [method, setMethod] = useState('');
-  const [expanded, setExpanded] = useState(initialExpanded);
-  const [collapsed, setCollapsed] = useState(initialExpanded);
+  const [groupOpen, setGroupOpen] = useState(() => new Map<string, boolean>());
   const [drawer, setDrawer] = useState(false);
   const [activeSection, setActiveSection] = useState('introduction');
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 800px)').matches);
@@ -107,11 +118,6 @@ function DocumentationView({ document, title, modules, moduleId, route }: {
     ? operations.find((operation) => operation.id === route.operationId) : undefined;
   const unknown = route.invalid || (!!modules && moduleId === undefined) || (route.operationId !== undefined && !selected);
   const outline = unknown ? [] : selected ? operationOutline : overviewOutline;
-  const navigation = useMemo(() => modules
-    ? modules.map((module) => {
-      const operations = collectOperations(module.document);
-      return { moduleId: module.id, document: module.document, operations, tags: collectTags(module.document, operations) };
-    }) : [{ moduleId: undefined, document, operations, tags }], [modules, document, operations, tags]);
   const filtered = useMemo(() => navigation.map((group) => ({
     ...group,
     operations: group.operations.filter((operation) => matchesOperation(operation, query, method,
@@ -152,9 +158,11 @@ function DocumentationView({ document, title, modules, moduleId, route }: {
       ? `${selected.definition.summary || selected.path} · ${document.info.title}`
       : `${document.info.title} · API 文档`;
     if (selected) {
-      if (modules) setCollapsed((previous) => new Set([...previous].filter((key) =>
-        !selected.tags.some((tag) => key === JSON.stringify([moduleId, tag])))));
-      else setExpanded((previous) => new Set([...previous, ...selected.tags]));
+      setGroupOpen((previous) => {
+        const next = new Map(previous);
+        selected.tags.forEach((tag) => next.set(groupKey(moduleId, tag), true));
+        return next;
+      });
     }
   }, [selected, document, modules, moduleId]);
   useEffect(() => {
@@ -216,23 +224,13 @@ function DocumentationView({ document, title, modules, moduleId, route }: {
     };
   }, [drawer]);
   function toggle(tag: string, scope?: string) {
-    const key = modules ? JSON.stringify([scope, tag]) : tag;
-    const update = modules ? setCollapsed : setExpanded;
-    update((previous) => {
-      const next = new Set(previous);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    const key = groupKey(scope, tag);
+    setGroupOpen((previous) => new Map(previous).set(key, !(previous.get(key) ?? !!modules)));
   }
   function openTag(tag: string) {
     setQuery('');
     setMethod('');
-    if (modules) setCollapsed((previous) => {
-      const next = new Set(previous);
-      next.delete(JSON.stringify([moduleId, tag]));
-      return next;
-    });
-    else setExpanded((previous) => new Set(previous).add(tag));
+    setGroupOpen((previous) => new Map(previous).set(groupKey(moduleId, tag), true));
     const first = operations.find((operation) => operation.tags.includes(tag));
     if (first) window.location.hash = operationHash(first, moduleId);
   }
@@ -377,7 +375,7 @@ function DocumentationView({ document, title, modules, moduleId, route }: {
             if (filtering && !group.operations.length) return null;
             const links = <OperationGroups tags={group.tags} operations={group.operations}
               moduleId={group.moduleId} selected={moduleId === group.moduleId ? selected : undefined}
-              isOpen={(tag) => filtering || (modules ? !collapsed.has(JSON.stringify([group.moduleId, tag])) : expanded.has(tag))}
+              isOpen={(tag) => filtering || (groupOpen.get(groupKey(group.moduleId, tag)) ?? !!modules)}
               filtering={filtering} onToggle={(tag) => toggle(tag, group.moduleId)} onNavigate={() => setDrawer(false)} />;
             return modules ? (
               <section className="module-group" key={group.moduleId} aria-label={`模块 ${group.moduleId} · ${group.document.info.title}`}>

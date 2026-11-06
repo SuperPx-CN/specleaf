@@ -39,6 +39,11 @@ test.describe('离线模块集合', () => {
     const leaf = page.getByRole('region', { name: `模块 ${leafId} · 叶子模块 API`, exact: true });
     await root.getByRole('button', { name: '资源 1', exact: true }).click();
     await expect(root.locator('.operation-link')).toHaveCount(0);
+    const search = page.getByRole('textbox', { name: '搜索接口' });
+    await search.fill('根模块');
+    await expect(root.getByRole('link', { name: 'POST 根模块创建', exact: true })).toBeVisible();
+    await search.fill('');
+    await expect(root.locator('.operation-link')).toHaveCount(0);
     await team.getByRole('link', { name: 'POST 团队模块创建', exact: true }).click();
     await expect(page.locator('.title-row h1')).toHaveText('团队模块创建');
     await expect(root.locator('.operation-link')).toHaveCount(0);

@@ -40,13 +40,13 @@ select {
 }
 button {
   cursor: pointer;
+  color: inherit;
+  border: 0;
+  background: none;
 }
 button:disabled {
   cursor: default;
   opacity: 0.5;
-}
-button {
-  color: inherit;
 }
 a {
   color: var(--purple);
@@ -60,10 +60,6 @@ summary:focus-visible,
 pre:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 3px;
-}
-button {
-  border: 0;
-  background: none;
 }
 button,
 select,
@@ -187,18 +183,6 @@ summary {
   align-items: center;
   justify-content: center;
   box-shadow: 0 3px 8px #7357e825;
-}
-.brand-divider {
-  font-weight: 300;
-  color: var(--muted);
-  margin: 0 13px;
-  font-size: 22px;
-}
-.brand-docs {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0.4px;
 }
 .top-nav {
   height: 100%;
@@ -745,6 +729,7 @@ summary {
   font-weight: 500;
   letter-spacing: 1.2px;
   margin-bottom: 17px;
+  flex-wrap: wrap;
 }
 .eyebrow > span:first-child:not(:last-child) {
   width: 5px;
@@ -1077,11 +1062,9 @@ summary {
   font-size: 14px;
   font-weight: 600;
   flex-wrap: wrap;
-}
-.group-card-title > code {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
+  text-align: left;
+  padding: 0;
+  overflow-wrap: anywhere;
 }
 .group-card-copy > .markdown {
   color: var(--text-secondary);
@@ -1996,10 +1979,6 @@ summary {
   margin: 10px 0;
   color: var(--muted);
 }
-.markdown img {
-  max-width: 100%;
-  height: auto;
-}
 @media (min-width: 1600px) {
   .page-shell main {
     padding-left: 70px;
@@ -2038,12 +2017,6 @@ summary {
     padding: 0 22px;
     gap: 35px;
   }
-  .brand-docs {
-    display: none;
-  }
-  .brand-divider {
-    display: none;
-  }
   .top-nav {
     gap: 22px;
   }
@@ -2076,9 +2049,6 @@ summary {
   .group-card-icon {
     width: 32px;
     height: 32px;
-  }
-  .group-card-title > code {
-    display: none;
   }
   .schema-head,
   .schema-row {
@@ -2128,15 +2098,6 @@ summary {
   }
   .brand-symbol svg {
     width: 19px;
-  }
-  .brand-docs {
-    display: inline;
-    font-size: 13px;
-  }
-  .brand-divider {
-    display: inline;
-    margin: 0 9px;
-    font-size: 18px;
   }
   .top-nav {
     display: none;
@@ -2226,10 +2187,6 @@ summary {
 @media (max-width: 570px) {
   .page-shell main {
     padding: 22px 20px 0;
-  }
-  .brand-docs,
-  .brand-divider {
-    display: none;
   }
   .version-pill {
     font-size: 11px;
@@ -2343,9 +2300,6 @@ summary {
   }
   .group-card-title {
     font-size: 14px;
-  }
-  .group-card-title > code {
-    display: inline;
   }
   .group-card-copy > .markdown {
     font-size: 12px;
@@ -2498,13 +2452,10 @@ summary {
     transition: none !important;
   }
 }
-
-.group-card-title { text-align: left; padding: 0; overflow-wrap: anywhere; }
 .group-card-copy .markdown p { margin: 0; }
 .group-card-copy .markdown strong { font-weight: 600; }
 .group-toggle > span:not(.group-count) { min-width: 0; overflow-wrap: anywhere; text-align: left; }
 .overview-hero h1, .eyebrow, .page-footer, .version-pill { overflow-wrap: anywhere; }
-.eyebrow { flex-wrap: wrap; }
 .copy-dialog {
   width: min(560px, calc(100vw - 32px));
   border: 1px solid var(--border);
