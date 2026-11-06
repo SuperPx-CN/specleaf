@@ -168,15 +168,21 @@ function shortValue(value: any) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+function FieldTableHead({ name }: { name: string }) {
+  return (
+    <div className="schema-head" role="row">
+      <span role="columnheader">{name}</span>
+      <span role="columnheader">类型</span>
+      <span role="columnheader">必填</span>
+      <span role="columnheader">说明与约束</span>
+    </div>
+  );
+}
+
 export function SchemaTable({ document, schema }: { document: ApiObject; schema: any }) {
   return (
     <div className="schema-table" role="table" aria-label="数据模型字段">
-      <div className="schema-head" role="row">
-        <span role="columnheader">字段名称</span>
-        <span role="columnheader">类型</span>
-        <span role="columnheader">必填</span>
-        <span role="columnheader">说明与约束</span>
-      </div>
+      <FieldTableHead name="字段名称" />
       <SchemaRow
         document={document}
         schema={schema}
@@ -425,12 +431,7 @@ export function ParameterTable({
   return (
     <>
       <div className="schema-table" role="table" aria-label="参数字段">
-        <div className="schema-head" role="row">
-          <span role="columnheader">参数名称</span>
-          <span role="columnheader">类型</span>
-          <span role="columnheader">必填</span>
-          <span role="columnheader">说明与约束</span>
-        </div>
+        <FieldTableHead name="参数名称" />
         {parameters.map((parameter) => (
           <SchemaRow
             key={`${parameter.in}:${parameter.name}`}

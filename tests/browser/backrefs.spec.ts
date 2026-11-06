@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { generate } from '../../build/generate';
-import { collectOperations, resolveObject, resolveSchema } from '../../src/lib/openapi';
+import { collectOperations, resolveObject } from '../../src/lib/openapi';
 
 test.describe('跨文件返回引用的离线文档', () => {
   let directory: string;
@@ -47,8 +47,8 @@ test.describe('跨文件返回引用的离线文档', () => {
       const [operation] = collectOperations(document);
       expect(operation.parameters.map((parameter) => parameter.name)).toEqual(['page', 'otherPage']);
       const response = resolveObject(document, operation.definition.responses['200']);
-      const item = resolveSchema(document, response.content['application/json'].schema);
-      expect(resolveSchema(document, item.properties.child).properties.label.type).toBe('string');
+      const item = resolveObject(document, response.content['application/json'].schema);
+      expect(resolveObject(document, item.properties.child).properties.label.type).toBe('string');
       if (mode === 'modules') {
         await page.getByRole('textbox', { name: '搜索接口' }).fill('');
         await page.getByRole('link', { name: 'GET 其他模块查询', exact: true }).click();

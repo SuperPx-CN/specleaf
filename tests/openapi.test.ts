@@ -17,7 +17,7 @@ import {
   operationIdFromHash,
   resolveObject,
   resolvePointer,
-  resolveSchema,
+  displaySchema,
   schemaConstraints,
   schemaEdges,
   schemaType,
@@ -231,13 +231,14 @@ describe('文档模型', () => {
       Base: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       Never: false,
     };
-    const schema = resolveSchema(document, {
+    const { schema } = displaySchema(document, {
       $ref: '#/Base',
       properties: { name: { type: 'string' } },
       required: ['name'],
     });
-    expect(schema.allOf[0].required).toEqual(['id']);
-    expect(schema.allOf[1].required).toEqual(['name']);
+    expect(schema.required).toEqual(['id', 'name']);
+    expect(schemaEdges(document, schema).map(({ name, required }) => [name, required]))
+      .toEqual([['id', true], ['name', true]]);
     expect(schemaType(document, { $ref: '#/Never' })).toBe('禁止任何值');
   });
   it('示例保留 null / false / 字符串和外部链接，不生成假数据', () => {

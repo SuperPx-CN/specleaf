@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DocumentationLoadError, loadContract, loadDocumentation } from '../build/contract';
-import { collectOperations, operationHash, resolveObject, resolveSchema } from '../src/lib/openapi';
+import { collectOperations, operationHash, resolveObject, schemaEdges, schemaType } from '../src/lib/openapi';
 import { documentationRoute, isModuleCollection, overviewHash } from '../src/lib/documentation';
 
 const directories: string[] = [];
@@ -35,10 +35,14 @@ describe('模块文档加载', () => {
     const body = resolveObject(document, post.definition.requestBody);
     expect(body.description).toBe('创建请求覆盖说明');
     expect(body.content['application/json'].example.$ref).toBe('../openapi.yaml#/components/parameters/Page');
-    const item = resolveSchema(document, body.content['application/json'].schema);
-    expect(item.properties.label.type).toBe('string');
+    const schema = body.content['application/json'].schema;
+    const fields = schemaEdges(document, schema);
+    expect(fields.map(({ name }) => name)).toEqual(['label', 'child']);
+    expect(schemaType(document, fields[0].schema)).toBe('string');
+    expect(schemaType(document, fields[1].schema)).toBe('递归引用');
+    const item = resolveObject(document, schema);
     expect(item.properties.child.$ref).toMatch(/^#/);
-    expect(resolveSchema(document, item.properties.child).properties.label.type).toBe('string');
+    expect(resolveObject(document, item.properties.child).properties.label.type).toBe('string');
     expect(() => JSON.stringify(document)).not.toThrow();
     const collection = (await loadDocumentation(directory)).document;
     expect(collection.modules.map(({ document }: any) => collectOperations(document).length)).toEqual([2, 1]);

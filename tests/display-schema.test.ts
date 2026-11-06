@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import contract from './fixtures/allof.json';
 import {
-  displaySchema, mediaExamples, resolveSchema, schemaConstraintSummary,
+  displaySchema, formatValue, mediaExamples, schemaConstraintSummary,
   schemaConstraints, schemaEdges, schemaType, type ApiObject,
 } from '../src/lib/openapi';
 
@@ -193,16 +193,15 @@ describe('allOf 展示合并', () => {
     expect(schemaType({}, view.schema)).not.toContain('allOf');
   });
 
-  it('展示合并不修改契约、现有解析结果或原始示例', () => {
+  it('展示合并不修改契约、导出内容或原始示例', () => {
     const original = JSON.stringify(contract);
     const media = contract.paths['/coupons'].post.requestBody.content['application/json'];
-    const resolved = resolveSchema(contract, response);
-    const before = JSON.stringify(resolved);
+    const exported = formatValue(contract);
     const data = child(contract, response, 'data');
     schemaEdges(contract, child(contract, data, '[] 数组元素'));
     expect(JSON.stringify(contract)).toBe(original);
-    expect(JSON.stringify(resolved)).toBe(before);
-    expect(resolved.allOf).toHaveLength(2);
+    expect(formatValue(contract)).toBe(exported);
+    expect(JSON.parse(exported).components.schemas.CouponResponse.allOf).toHaveLength(2);
     expect(mediaExamples(contract, media)[0].value).toEqual(media.example);
   });
 });

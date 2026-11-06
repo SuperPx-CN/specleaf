@@ -70,37 +70,6 @@ export function resolveObject(
   return { ...resolveObject(document, resolvePointer(document, $ref), next), ...siblings };
 }
 
-// Schema siblings constrain the referenced schema together in OpenAPI 3.1.
-// Keep both branches rather than overwriting properties or required arrays.
-export function resolveSchema(document: ApiObject, raw: any, visited = new Set<string>()): any {
-  if (typeof raw === 'boolean') return raw;
-  const node = object(raw);
-  if (typeof node.$ref !== 'string' || visited.has(node.$ref)) return node;
-  const next = new Set(visited).add(node.$ref);
-  const { $ref, ...siblings } = node;
-  const target = resolveSchema(document, resolvePointer(document, $ref), next);
-  const annotations = new Set([
-    'title',
-    'summary',
-    'description',
-    'example',
-    'examples',
-    'deprecated',
-    'readOnly',
-    'writeOnly',
-  ]);
-  const hasConstraints = Object.keys(siblings).some(
-    (key) => !annotations.has(key) && !key.startsWith('x-'),
-  );
-  if (hasConstraints)
-    return {
-      ...Object.fromEntries(Object.entries(siblings).filter(([key]) => annotations.has(key))),
-      allOf: [target, siblings],
-    };
-  if (typeof target === 'boolean') return target;
-  return { ...target, ...siblings };
-}
-
 export function collectOperations(document: ApiObject): Operation[] {
   const result: Operation[] = [];
   for (const [path, raw] of Object.entries(object(document.paths))) {
@@ -371,12 +340,11 @@ export function displaySchema(document: ApiObject, raw: any): DisplaySchema {
   return view;
 }
 
-export function schemaType(document: ApiObject, raw: any, seen = new Set<string>(), depth = 0): string {
+export function schemaType(document: ApiObject, raw: any, depth = 0): string {
   if (depth >= 32) return '已达到展示深度上限';
   if (raw === true) return '任意类型';
   if (raw === false) return '禁止任何值';
   const view = displaySchema(document, raw);
-  if (view.references.some((reference) => seen.has(reference))) return '递归引用';
   const schema = view.schema;
   if (view.forbidden) return '禁止任何值';
   if ((Array.isArray(schema.type) && !schema.type.length) || schema.enum?.length === 0)
@@ -385,12 +353,12 @@ export function schemaType(document: ApiObject, raw: any, seen = new Set<string>
   let type: string;
   if (Array.isArray(schema.type))
     type = schema.type.map((type: string) => type === 'array'
-      ? `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>` : type).join(' | ');
+      ? `array<${schemaType(document, schema.items ?? true, depth + 1)}>` : type).join(' | ');
   else if (schema.type === 'array')
-    type = `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>`;
+    type = `array<${schemaType(document, schema.items ?? true, depth + 1)}>`;
   else if (schema.type) type = schema.type;
   else if (own(schema, 'items') || schema.prefixItems)
-    type = `array<${schemaType(document, schema.items ?? true, seen, depth + 1)}>`;
+    type = `array<${schemaType(document, schema.items ?? true, depth + 1)}>`;
   else if (view.alternatives.some(({ keyword }) => keyword === 'oneOf')) type = 'oneOf · 恰好一个';
   else if (view.alternatives.some(({ keyword }) => keyword === 'anyOf')) type = 'anyOf · 至少一个';
   else if (schema.properties || own(schema, 'additionalProperties')) type = 'object';
@@ -571,7 +539,6 @@ export function makeCurl(
   }
   let url = base.replace(/\/$/, '') + path;
   if (query.size) url += (url.includes('?') ? '&' : '?') + query.toString();
-  const lines = [`curl --request ${operation.method.toUpperCase()} ${shellQuote(url)}`];
   const security = operation.definition.security ?? document.security ?? [];
   // Requirements are OR alternatives. Use only the first one in the template.
   for (const name of Object.keys(security[0] || {})) {
@@ -587,39 +554,22 @@ export function makeCurl(
       headers.push(`${scheme.name}: {${name}}`);
     if (scheme.type === 'apiKey' && scheme.in === 'cookie')
       cookies.push(`${scheme.name}={${name}}`);
-    if (scheme.type === 'apiKey' && scheme.in === 'query' && !query.has(scheme.name)) {
-      lines[0] = lines[0].replace(
-        shellQuote(url),
-        shellQuote(
-          url + (url.includes('?') ? '&' : '?') + encodeURIComponent(scheme.name) + `={${name}}`,
-        ),
-      );
+    if (scheme.type === 'apiKey' && scheme.in === 'query' && !query.has(scheme.name))
       url += (url.includes('?') ? '&' : '?') + encodeURIComponent(scheme.name) + `={${name}}`;
-    }
   }
+  const lines = [`curl --request ${operation.method.toUpperCase()} ${shellQuote(url)}`];
   // cURL supplies the multipart boundary when --form is used.
   if (mediaType && !mediaType.includes('multipart/form-data'))
     headers.push(`Content-Type: ${mediaType}`);
   if (cookies.length) headers.push(`Cookie: ${cookies.join('; ')}`);
   for (const header of [...new Set(headers)]) lines.push(`  --header ${shellQuote(header)}`);
   if (example && own(example, 'value')) {
-    if (
-      mediaType?.includes('multipart/form-data') &&
-      example.value &&
-      typeof example.value === 'object'
-    ) {
+    const formOption = mediaType?.includes('multipart/form-data') ? '--form'
+      : mediaType?.includes('application/x-www-form-urlencoded') ? '--data-urlencode' : undefined;
+    if (formOption && example.value && typeof example.value === 'object') {
       for (const [key, value] of Object.entries(example.value))
         lines.push(
-          `  --form ${shellQuote(`${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)}`,
-        );
-    } else if (
-      mediaType?.includes('application/x-www-form-urlencoded') &&
-      example.value &&
-      typeof example.value === 'object'
-    ) {
-      for (const [key, value] of Object.entries(example.value))
-        lines.push(
-          `  --data-urlencode ${shellQuote(`${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)}`,
+          `  ${formOption} ${shellQuote(`${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)}`,
         );
     } else lines.push(`  --data-raw ${shellQuote(formatValue(example.value, mediaType))}`);
   }
