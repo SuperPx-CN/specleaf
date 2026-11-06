@@ -180,7 +180,7 @@ paths:
 
 当前 Operation 的标准字段 `deprecated: true` 优先显示“已弃用”，即使 `x-api-status` 是其他值，也只显示一个状态徽标。否则只识别表中的小写字符串；缺失、未知值、大小写不符或类型错误时均不显示状态标记。状态不从文档根级、路径或 tag 继承，也不映射其他工具的状态字段。
 
-“操作策略”以“接口状态”为标题，保留 `x-api-status` 原字段名和值。状态解析只用于展示，导出的合并契约保留原值，不自动补写 `deprecated`。`x-design-status` 仍表示设计状态，在操作策略中展示；文档根级的 `x-contract-status` 仍用于概览中的契约状态说明，两者均不作为接口状态来源。
+接口状态在详情页标题区域展示，“操作策略”不再重复展示 `x-api-status`。状态解析只用于展示，导出的合并契约保留原值，不自动补写 `deprecated`。`x-design-status` 仍表示设计状态，在操作策略中展示；文档根级的 `x-contract-status` 仍用于概览中的契约状态说明，两者均不作为接口状态来源。
 
 `examples/openapi.yaml` 演示五种状态，`examples/minimal.json` 演示未指定接口状态的契约。
 

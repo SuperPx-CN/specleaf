@@ -845,7 +845,6 @@ const POLICY_LABELS: Record<string, string> = {
   'x-idempotency': '幂等策略',
   'x-audit': '审计要求',
   'x-sensitive-fields': '敏感字段',
-  'x-api-status': '接口状态',
   'x-design-status': '设计状态',
 };
 const POLICY_FIELDS: Record<string, string> = {
@@ -882,7 +881,7 @@ function policyValue(value: any): string {
             : String(value);
 }
 function Policies({ definition }: { definition: ApiObject }) {
-  const extensions = Object.entries(definition).filter(([key]) => key.startsWith('x-'));
+  const extensions = Object.entries(definition).filter(([key]) => key.startsWith('x-') && key !== 'x-api-status');
   if (!extensions.length) return <div className="empty-note">契约未定义扩展操作策略</div>;
   return (
     <div className="policy-grid">
