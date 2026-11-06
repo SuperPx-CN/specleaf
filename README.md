@@ -35,7 +35,7 @@ npm install -D specleaf@latest
 
 ## 安装 Agent skill
 
-SpecLeaf 随 npm 包提供同一份 `specleaf` skill，可安装给 Codex、Claude Code 和 OpenCode，让 Agent 按自然语言请求选择本地契约、生成或更新离线 HTML，并定位生成失败。
+SpecLeaf **1.2.0+** 随 npm 包提供同一份 `specleaf` skill，可安装给 Codex、Claude Code 和 OpenCode，让 Agent 按自然语言请求选择本地契约、生成或更新离线 HTML，并定位生成失败。
 
 ```bash
 # 安装到当前目录，支持三个工具；也可用 npx specleaf install skill
@@ -177,7 +177,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.1.3.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.2.0.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```
