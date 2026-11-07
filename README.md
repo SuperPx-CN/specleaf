@@ -35,7 +35,7 @@ npm install -D specleaf@latest
 
 ## 安装 Agent skill
 
-SpecLeaf **1.2.0+** 随 npm 包提供同一份 `specleaf` skill，可安装给 Codex、Claude Code 和 OpenCode，让 Agent 按自然语言请求选择本地契约、生成或更新离线 HTML，并定位生成失败。
+SpecLeaf **1.2.0+** 随 npm 包提供同一份 `specleaf` skill，可安装给 Codex、Claude Code 和 OpenCode，用于生成或更新离线 HTML、定位生成失败。**1.3.0+** 还支持为 SpecLeaf 编写或更新 OpenAPI 契约、使用 `x-api-status` 等扩展。
 
 ```bash
 # 安装到当前目录，支持三个工具；也可用 npx specleaf install skill
@@ -65,7 +65,11 @@ OpenCode 使用其支持的 `.agents/skills` 兼容目录，与 Codex 共用一�
 
 安装直接复制包内 skill，无需联网，也不要求三个 Agent 工具已安装。重复安装时跳过内容相同的文件；已有文件内容不同时，先报告冲突且不写入任何目标，使用 `--force` 可更新随包提供的文件。额外文件会保留；安装路径中的符号链接及非预期文件类型会被拒绝。`specleaf.json` 记录安装时的 CLI 版本，供 Agent 在需要临时调用 npm 包时固定版本。通过 npx 首次获取 SpecLeaf 仍可能需要联网。
 
-安装后可在 Agent 中请求“把 docs/apis 下的接口契约生成为离线 HTML”。Codex 可通过 `$specleaf` 显式调用，Claude Code 可通过 `/specleaf` 调用；未发现新增 skill 时重新打开会话。skill 聚焦已有契约的生成、更新和错误诊断，生成时源契约只读。
+安装后可在 Agent 中请求“把 docs/apis 下的接口契约生成为离线 HTML”，也可请求“为 SpecLeaf 编写订单查询接口的 OpenAPI，接口处于开发中”。Codex 可通过 `$specleaf` 显式调用，Claude Code 可通过 `/specleaf` 调用；未发现新增 skill 时重新打开会话。
+
+skill 按任务读取随包提供的 [编写指南](skills/specleaf/references/authoring.md)、[扩展字段规则](skills/specleaf/references/extensions.md)，新建契约可参考 [完整模板](skills/specleaf/assets/openapi.yaml)。编写或修复契约时按需求修改；仅生成或更新 HTML 时，入口和引用文件保持只读。接口状态默认可选，没有依据时不猜测状态。完成编写后优先运行项目已有校验；SpecLeaf 当前没有独立的 `check` / `lint` 子命令，HTML 生成成功不等同于完整 OpenAPI 校验。
+
+已有安装需要先升级到 SpecLeaf **1.3.0+**，再在原安装范围执行 `specleaf install skill --force`；用户级安装加 `--global`，原先限定工具时沿用 `--agent`。
 
 ## 生成单个 HTML
 
@@ -177,7 +181,7 @@ npm pack
 mkdir ../specleaf-consumer
 cd ../specleaf-consumer
 npm init -y
-npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.2.1.tgz
+npm install --omit=dev --ignore-scripts ../specleaf/specleaf-1.3.0.tgz
 npm exec -- specleaf ../specleaf/examples/minimal.json -o ./api.html
 npx specleaf --version
 ```

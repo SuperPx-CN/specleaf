@@ -1,0 +1,35 @@
+# 独立可生成的演示模板；将接口、模型和数据替换为项目实际定义。
+openapi: 3.0.3
+info:
+  title: 示例 API
+  version: 0.1.0
+tags:
+  - name: items
+    description: 示例资源
+paths:
+  /items:
+    get:
+      operationId: listItems
+      summary: 查询资源
+      tags: [items]
+      # 演示草稿状态。真实状态未知且无项目约定时，省略此字段。
+      x-api-status: draft
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+              example:
+                - id: example-item
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string

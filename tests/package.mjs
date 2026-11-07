@@ -42,7 +42,8 @@ try {
   process.stdout.write('打包并检查文件白名单…\n');
   const { stdout } = await npm(root, 'pack', '--json', '--pack-destination', directory);
   const packed = JSON.parse(stdout)[0];
-  const expected = ['LICENSE', 'README.md', 'lib/assets/favicon.svg', 'lib/assets/ui.css', 'lib/assets/ui.js', 'lib/cli.js', 'package.json', 'skills/specleaf/SKILL.md', 'skills/specleaf/agents/openai.yaml'];
+  const skillFiles = ['SKILL.md', 'agents/openai.yaml', 'references/authoring.md', 'references/extensions.md', 'assets/openapi.yaml'];
+  const expected = ['LICENSE', 'README.md', 'lib/assets/favicon.svg', 'lib/assets/ui.css', 'lib/assets/ui.js', 'lib/cli.js', 'package.json', ...skillFiles.map((file) => `skills/specleaf/${file}`)];
   assert.deepEqual(packed.files.map((file) => file.path).sort(), expected.sort());
   // Windows records readable file bits; executable commands use npm's .cmd shim.
   const commandMode = process.platform === 'win32' ? 0o444 : 0o111;
@@ -80,9 +81,9 @@ try {
   const installedSkill = join(consumer, '.agents/skills/specleaf');
   const claudeSkill = join(consumer, '.claude/skills/specleaf');
   for (const target of [installedSkill, claudeSkill]) {
-    assert.equal(await readFile(join(target, 'SKILL.md'), 'utf8'), await readFile(join(installed, 'skills/specleaf/SKILL.md'), 'utf8'));
+    for (const file of skillFiles)
+      assert.equal(await readFile(join(target, file), 'utf8'), await readFile(join(installed, 'skills/specleaf', file), 'utf8'));
     assert.deepEqual(JSON.parse(await readFile(join(target, 'specleaf.json'), 'utf8')), { version: manifest.version });
-    await access(join(target, 'agents/openai.yaml'));
   }
   const repeated = await cli(consumer, executable, 'install', 'skill');
   assert.match(repeated.stdout, /跳过/);
@@ -93,6 +94,22 @@ try {
   await cli(consumer, executable, 'install', 'skill', '--force');
   assert.equal(await readFile(join(installedSkill, 'notes.md'), 'utf8'), '保留备注');
   assert.match(await readFile(join(installedSkill, 'SKILL.md'), 'utf8'), /name: specleaf/);
+
+  process.stdout.write('验收安装后的独立契约模板生成并保留状态及源文件…\n');
+  const template = join(installedSkill, 'assets/openapi.yaml');
+  const source = await readFile(template, 'utf8');
+  const templateDirectory = join(consumer, '模板 契约');
+  await mkdir(templateDirectory);
+  const templateEntry = join(templateDirectory, 'openapi.yaml');
+  await copyFile(template, templateEntry);
+  const templateOutput = join(consumer, '输出 目录/template.html');
+  await cli(consumer, executable, templateEntry, '-o', templateOutput);
+  const templateDocument = await readDocument(templateOutput);
+  assert.equal(templateDocument.openapi, '3.0.3');
+  assert.equal(templateDocument.paths['/items'].get['x-api-status'], 'draft');
+  assert.equal(templateDocument.paths['/items'].get.responses['200'].content['application/json'].schema.items.$ref, '#/components/schemas/Item');
+  assert.equal(await readFile(templateEntry, 'utf8'), source);
+  assert.equal(await readFile(template, 'utf8'), source);
 
   process.stdout.write('验收 npm scripts、npm exec、npx、临时全局安装…\n');
   const nested = join(consumer, 'nested');

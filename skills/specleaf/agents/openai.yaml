@@ -1,4 +1,4 @@
 interface:
   display_name: "SpecLeaf"
-  short_description: "Generate offline HTML from local OpenAPI contracts"
-  default_prompt: "Use $specleaf to generate an offline HTML document from this project’s OpenAPI contracts."
+  short_description: "Author OpenAPI with SpecLeaf extensions and render offline HTML"
+  default_prompt: "Use $specleaf to update this project’s OpenAPI contracts with the appropriate SpecLeaf extensions and generate offline HTML documentation."

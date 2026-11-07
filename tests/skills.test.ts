@@ -44,7 +44,7 @@ describe('skill 安装文件', () => {
     ]);
     const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'));
     for (const result of results) {
-      for (const name of ['SKILL.md', 'agents/openai.yaml'])
+      for (const name of ['SKILL.md', 'agents/openai.yaml', 'references/authoring.md', 'references/extensions.md', 'assets/openapi.yaml'])
         expect(await readFile(join(result.directory, name), 'utf8'))
           .toBe(await readFile(join(projectRoot, 'skills/specleaf', name), 'utf8'));
       expect(JSON.parse(await readFile(join(result.directory, 'specleaf.json'), 'utf8'))).toEqual({ version: manifest.version });
